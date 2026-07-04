@@ -1,0 +1,50 @@
+# macOS
+.DS_Store
+**/.DS_Store
+
+# Environment and secrets
+.env
+.env.*
+!.env.example
+.venv/
+venv/
+env/
+
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.ipynb_checkpoints/
+
+# Node / dashboard
+node_modules/
+.next/
+dist/
+build/
+coverage/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Raw and generated data
+data/raw/*
+!data/raw/.gitkeep
+data/processed/*
+!data/processed/.gitkeep
+
+# Model and experiment artifacts
+models/
+mlruns/
+*.pkl
+*.joblib
+*.onnx
+
+# Logs and temporary files
+logs/
+*.log
+tmp/
+temp/
