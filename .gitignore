@@ -44,6 +44,7 @@ mlruns/
 *.onnx
 
 # Logs and temporary files
+.cache/
 logs/
 *.log
 tmp/
