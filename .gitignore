@@ -37,7 +37,10 @@ data/processed/*
 !data/processed/.gitkeep
 
 # Model and experiment artifacts
-models/
+/models/*
+!/models/baseline_forecast/
+/models/baseline_forecast/*
+!/models/baseline_forecast/model_manifest.json
 mlruns/
 *.pkl
 *.joblib

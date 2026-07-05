@@ -1,0 +1,134 @@
+{
+  "artifact_type": "baseline_forecast_model",
+  "artifact_version": 1,
+  "generated_at_utc": "2026-07-05T12:13:45.983331+00:00",
+  "phase": "Phase 4 - Baseline Forecast Model",
+  "source_script": "src/models/build_baseline_forecast.py",
+  "training_input": "/Users/mskayacioglu/Documents/projects/bir-nyc/data/processed/crime_weekly_area.parquet",
+  "prediction_output": "/Users/mskayacioglu/Documents/projects/bir-nyc/data/processed/baseline_predictions.parquet",
+  "metrics_output": "/Users/mskayacioglu/Documents/projects/bir-nyc/data/processed/baseline_metrics.json",
+  "report_output": "/Users/mskayacioglu/Documents/projects/bir-nyc/reports/baseline_model_report.md",
+  "target": "next-week crime_count by week_start, borough, precinct, offense_type, law_category",
+  "segment_keys": [
+    "borough",
+    "precinct",
+    "offense_type",
+    "law_category"
+  ],
+  "training_window": {
+    "min_week_start": "2005-12-26",
+    "max_week_start": "2025-12-29",
+    "segment_count": 8466
+  },
+  "backtest_window": {
+    "backtest_start_week": "2024-12-30",
+    "backtest_end_week": "2025-12-22",
+    "backtest_rows": 437144
+  },
+  "forecast_week": "2026-01-05",
+  "baseline_model_rules": [
+    {
+      "baseline_method": "previous_week",
+      "rule": "Use the immediately prior weekly crime_count for the same segment.",
+      "required_prior_weeks": 1
+    },
+    {
+      "baseline_method": "trailing_4_week_mean",
+      "rule": "Use the arithmetic mean of the prior 4 weekly crime_count values for the same segment.",
+      "required_prior_weeks": 4
+    },
+    {
+      "baseline_method": "trailing_8_week_mean",
+      "rule": "Use the arithmetic mean of the prior 8 weekly crime_count values for the same segment.",
+      "required_prior_weeks": 8
+    },
+    {
+      "baseline_method": "previous_year_same_week",
+      "rule": "Use the weekly crime_count from 52 weeks prior for the same segment.",
+      "required_prior_weeks": 52
+    }
+  ],
+  "selected_baseline": {
+    "baseline_method": "trailing_8_week_mean",
+    "prediction_count": 435942,
+    "total_backtest_rows": 437144,
+    "prediction_coverage_pct": 99.73,
+    "actual_event_count": 566983,
+    "total_actual_event_count": 567306,
+    "mae": 0.4929,
+    "rmse": 1.4128,
+    "weighted_mae": 3.7023
+  },
+  "overall_metrics": [
+    {
+      "baseline_method": "previous_week",
+      "prediction_count": 437007,
+      "total_backtest_rows": 437144,
+      "prediction_coverage_pct": 99.97,
+      "actual_event_count": 567162,
+      "total_actual_event_count": 567306,
+      "mae": 0.601,
+      "rmse": 1.7764,
+      "weighted_mae": 4.5649
+    },
+    {
+      "baseline_method": "previous_year_same_week",
+      "prediction_count": 426818,
+      "total_backtest_rows": 437144,
+      "prediction_coverage_pct": 97.64,
+      "actual_event_count": 564841,
+      "total_actual_event_count": 567306,
+      "mae": 0.6796,
+      "rmse": 2.0772,
+      "weighted_mae": 5.2965
+    },
+    {
+      "baseline_method": "trailing_4_week_mean",
+      "prediction_count": 436570,
+      "total_backtest_rows": 437144,
+      "prediction_coverage_pct": 99.87,
+      "actual_event_count": 567121,
+      "total_actual_event_count": 567306,
+      "mae": 0.5058,
+      "rmse": 1.4537,
+      "weighted_mae": 3.7967
+    },
+    {
+      "baseline_method": "trailing_8_week_mean",
+      "prediction_count": 435942,
+      "total_backtest_rows": 437144,
+      "prediction_coverage_pct": 99.73,
+      "actual_event_count": 566983,
+      "total_actual_event_count": 567306,
+      "mae": 0.4929,
+      "rmse": 1.4128,
+      "weighted_mae": 3.7023
+    }
+  ],
+  "leakage_controls": {
+    "split_type": "time_based_backtest",
+    "target_week_excluded_from_features": true,
+    "latest_week_excluded_from_backtest": true,
+    "zero_fill_rule": "Missing weekly rows are treated as zero crime_count after a segment's first observed week."
+  },
+  "feature_policy": {
+    "forecast_columns_used": [
+      "week_start",
+      "borough",
+      "precinct",
+      "offense_type",
+      "law_category",
+      "crime_count"
+    ],
+    "sensitive_columns_excluded": [
+      "SUSP_AGE_GROUP",
+      "SUSP_RACE",
+      "SUSP_SEX",
+      "VIC_AGE_GROUP",
+      "VIC_RACE",
+      "VIC_SEX"
+    ],
+    "person_level_prediction": false,
+    "enforcement_recommendations": false
+  }
+}
