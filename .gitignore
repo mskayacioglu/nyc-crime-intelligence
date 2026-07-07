@@ -41,6 +41,9 @@ data/processed/*
 !/models/baseline_forecast/
 /models/baseline_forecast/*
 !/models/baseline_forecast/model_manifest.json
+!/models/weekly_forecast/
+/models/weekly_forecast/*
+!/models/weekly_forecast/model_manifest.json
 mlruns/
 *.pkl
 *.joblib

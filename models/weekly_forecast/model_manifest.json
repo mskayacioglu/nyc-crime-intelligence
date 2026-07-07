@@ -1,0 +1,200 @@
+{
+  "artifact_type": "weekly_forecast_ml_model",
+  "artifact_version": 1,
+  "generated_at_utc": "2026-07-05T12:40:05.068774+00:00",
+  "phase": "Phase 5 - ML Forecast Model",
+  "source_script": "src/models/build_ml_forecast.py",
+  "training_input": "/Users/mskayacioglu/Documents/projects/bir-nyc/data/processed/crime_weekly_area.parquet",
+  "baseline_manifest_input": "/Users/mskayacioglu/Documents/projects/bir-nyc/models/baseline_forecast/model_manifest.json",
+  "prediction_output": "/Users/mskayacioglu/Documents/projects/bir-nyc/data/processed/ml_predictions.parquet",
+  "metrics_output": "/Users/mskayacioglu/Documents/projects/bir-nyc/data/processed/ml_metrics.json",
+  "report_output": "/Users/mskayacioglu/Documents/projects/bir-nyc/reports/ml_model_report.md",
+  "target": "next-week crime_count by week_start, borough, precinct, offense_type, law_category",
+  "model": {
+    "model_name": "duckdb_lag_ensemble_regressor",
+    "model_version": 1,
+    "dependency_mode": "stdlib_plus_duckdb_no_sklearn",
+    "selection_objective": "validation_rmse",
+    "selected_parameters": {
+      "alpha": 0.25,
+      "beta": 0.1,
+      "gamma": 0.05,
+      "shrinkage": 1.0,
+      "validation_prediction_count": 426818,
+      "validation_actual_event_count": 571385,
+      "validation_mae": 0.49776,
+      "validation_rmse": 1.42785,
+      "validation_weighted_mae": 3.79574
+    },
+    "prediction_formula": "max(0, shrinkage * (trailing_8_week_mean + alpha * (trailing_4_week_mean - trailing_8_week_mean) + beta * (lag_1_week_count - trailing_4_week_mean) + gamma * (lag_52_week_count - trailing_8_week_mean)))"
+  },
+  "segment_keys": [
+    "borough",
+    "precinct",
+    "offense_type",
+    "law_category"
+  ],
+  "feature_groups": {
+    "time": [
+      "year",
+      "month",
+      "iso_week",
+      "quarter",
+      "week_index"
+    ],
+    "lag": [
+      "lag_1_week_count",
+      "lag_2_week_count",
+      "lag_4_week_count",
+      "lag_8_week_count",
+      "lag_52_week_count"
+    ],
+    "rolling_prior_weeks": [
+      "trailing_4_week_mean",
+      "trailing_4_week_std",
+      "trailing_4_week_min",
+      "trailing_4_week_max",
+      "trailing_8_week_mean",
+      "trailing_8_week_std",
+      "trailing_8_week_min",
+      "trailing_8_week_max"
+    ],
+    "segment_history": [
+      "segment_prior_week_count",
+      "segment_prior_total_count",
+      "segment_prior_mean_count"
+    ],
+    "segment_identifiers": [
+      "borough",
+      "precinct",
+      "offense_type",
+      "law_category"
+    ]
+  },
+  "model_feature_columns": [
+    "lag_1_week_count",
+    "lag_52_week_count",
+    "trailing_4_week_mean",
+    "trailing_8_week_mean"
+  ],
+  "training_window": {
+    "min_week_start": "2005-12-26",
+    "max_week_start": "2025-12-29",
+    "segment_count": 8466
+  },
+  "validation_window": {
+    "validation_start_week": "2024-01-01",
+    "validation_end_week": "2024-12-23"
+  },
+  "backtest_window": {
+    "backtest_start_week": "2024-12-30",
+    "backtest_end_week": "2025-12-22",
+    "backtest_rows": 437144
+  },
+  "forecast_week": "2026-01-05",
+  "overall_metrics": [
+    {
+      "prediction_count": 437144,
+      "total_backtest_rows": 437144,
+      "prediction_coverage_pct": 100.0,
+      "actual_event_count": 567306,
+      "total_actual_event_count": 567306,
+      "mae": 0.4894,
+      "rmse": 1.3943,
+      "weighted_mae": 3.6555
+    }
+  ],
+  "baseline_comparison": {
+    "baseline_reference": {
+      "baseline_method": "trailing_8_week_mean",
+      "prediction_count": 435942,
+      "total_backtest_rows": 437144,
+      "prediction_coverage_pct": 99.73,
+      "actual_event_count": 566983,
+      "mae": 0.4929,
+      "rmse": 1.4128,
+      "weighted_mae": 3.7023
+    },
+    "comparison_rows": [
+      {
+        "model": "Phase 4 trailing_8_week_mean",
+        "prediction_count": 435942,
+        "prediction_coverage_pct": 99.73,
+        "mae": 0.4929,
+        "rmse": 1.4128,
+        "weighted_mae": 3.7023
+      },
+      {
+        "model": "Phase 5 duckdb_lag_ensemble_regressor",
+        "prediction_count": 437144,
+        "prediction_coverage_pct": 100.0,
+        "mae": 0.4894,
+        "rmse": 1.3943,
+        "weighted_mae": 3.6555
+      },
+      {
+        "model": "Delta ML - baseline",
+        "mae": -0.0035,
+        "rmse": -0.0185,
+        "weighted_mae": -0.0468
+      }
+    ],
+    "beats_baseline": {
+      "mae": true,
+      "rmse": true,
+      "weighted_mae": true
+    },
+    "beats_baseline_all_core_metrics": true
+  },
+  "leakage_controls": {
+    "split_type": "time_based_validation_and_backtest",
+    "random_splits_used": false,
+    "target_week_excluded_from_features": true,
+    "validation_window_precedes_backtest": true,
+    "phase_4_backtest_window_reused": true,
+    "zero_fill_rule": "Missing weekly rows are treated as zero crime_count after a segment's first observed week."
+  },
+  "feature_policy": {
+    "forecast_columns_used": [
+      "week_start",
+      "borough",
+      "precinct",
+      "offense_type",
+      "law_category",
+      "crime_count"
+    ],
+    "engineered_feature_columns": [
+      "year",
+      "month",
+      "iso_week",
+      "quarter",
+      "week_index",
+      "lag_1_week_count",
+      "lag_2_week_count",
+      "lag_4_week_count",
+      "lag_8_week_count",
+      "lag_52_week_count",
+      "trailing_4_week_mean",
+      "trailing_4_week_std",
+      "trailing_4_week_min",
+      "trailing_4_week_max",
+      "trailing_8_week_mean",
+      "trailing_8_week_std",
+      "trailing_8_week_min",
+      "trailing_8_week_max",
+      "segment_prior_week_count",
+      "segment_prior_total_count",
+      "segment_prior_mean_count"
+    ],
+    "sensitive_columns_excluded": [
+      "SUSP_AGE_GROUP",
+      "SUSP_RACE",
+      "SUSP_SEX",
+      "VIC_AGE_GROUP",
+      "VIC_RACE",
+      "VIC_SEX"
+    ],
+    "person_level_prediction": false,
+    "enforcement_recommendations": false
+  }
+}
