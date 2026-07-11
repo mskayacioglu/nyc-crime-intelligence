@@ -1,0 +1,1695 @@
+#!/usr/bin/env python3
+"""Build the compact, aggregate-safe Phase 7A Overview data contract.
+
+The browser receives a small JSON metadata/signal document plus a gzip-compressed
+columnar cube.  It never receives complaint-level records.  All dates and the
+generated timestamp are derived from the processed data rather than the clock.
+
+Run from the repository root:
+
+    .venv/bin/python src/analytics/build_dashboard_overview.py
+"""
+
+from __future__ import annotations
+
+import argparse
+import gzip
+import io
+import json
+import math
+import os
+import shutil
+import sys
+from array import array
+from datetime import date, datetime, timedelta
+from pathlib import Path
+from typing import Any
+
+
+DEFAULT_PROCESSED_DIR = Path("data/processed")
+DEFAULT_DASHBOARD_DATA_DIR = Path("dashboard/public/data")
+DEFAULT_MODEL_DIR = Path("models/weekly_forecast")
+DEFAULT_BASELINE_MODEL_DIR = Path("models/baseline_forecast")
+
+CLEAN_EVENTS_FILE = "complaints_clean.parquet"
+WEEKLY_FILE = "crime_weekly_area.parquet"
+ANOMALIES_FILE = "anomalies.parquet"
+HOTSPOTS_FILE = "hotspots.parquet"
+ML_PREDICTIONS_FILE = "ml_predictions.parquet"
+ANOMALY_METRICS_FILE = "anomaly_metrics.json"
+HOTSPOT_METRICS_FILE = "hotspot_metrics.json"
+ML_METRICS_FILE = "ml_metrics.json"
+MODEL_MANIFEST_FILE = "model_manifest.json"
+
+OVERVIEW_FILE = "overview.json"
+CUBE_FILE = "overview-cube.bin.gz"
+PROCESSED_OVERVIEW_FILE = "dashboard_overview.json"
+PROCESSED_CUBE_FILE = "dashboard_overview_cube.bin.gz"
+SCHEMA_VERSION = "1.0.0"
+
+SENSITIVE_COLUMNS = [
+    "SUSP_AGE_GROUP",
+    "SUSP_RACE",
+    "SUSP_SEX",
+    "VIC_AGE_GROUP",
+    "VIC_RACE",
+    "VIC_SEX",
+]
+
+CLEAN_REQUIRED_COLUMNS = ["complaint_from_date", "is_clean_event_for_aggregate"]
+WEEKLY_REQUIRED_COLUMNS = [
+    "week_start",
+    "borough",
+    "precinct",
+    "offense_type",
+    "law_category",
+    "crime_count",
+]
+ANOMALY_REQUIRED_COLUMNS = [
+    "week_start",
+    "borough",
+    "precinct",
+    "offense_type",
+    "law_category",
+    "actual_crime_count",
+    "expected_count",
+    "expected_count_source",
+    "residual_count",
+    "is_anomaly",
+    "anomaly_severity",
+    "anomaly_score",
+]
+HOTSPOT_REQUIRED_COLUMNS = [
+    "hotspot_grain",
+    "borough",
+    "precinct",
+    "grid_latitude",
+    "grid_longitude",
+    "offense_type",
+    "law_category",
+    "scoring_end_date",
+    "recent_event_count",
+    "baseline_expected_recent_count",
+    "recent_vs_baseline_lift_pct",
+    "composite_score",
+    "is_high_or_critical_hotspot",
+    "hotspot_severity",
+]
+FORECAST_REQUIRED_COLUMNS = [
+    "week_start",
+    "borough",
+    "precinct",
+    "offense_type",
+    "law_category",
+    "predicted_crime_count",
+    "ml_model_name",
+    "is_next_week_forecast",
+]
+
+ANOMALY_ROW_COLUMNS = [
+    "weekIndex",
+    "boroughIndex",
+    "precinctIndex",
+    "offenseTypeIndex",
+    "lawCategoryIndex",
+    "actualCount",
+    "expectedCount",
+    "residualCount",
+    "score",
+    "severityIndex",
+    "expectedSourceIndex",
+]
+HOTSPOT_ROW_COLUMNS = [
+    "grainIndex",
+    "boroughIndex",
+    "precinctIndex",
+    "offenseTypeIndex",
+    "lawCategoryIndex",
+    "scoringEndDate",
+    "locationLabel",
+    "recentCount",
+    "expectedRecentCount",
+    "liftPct",
+    "score",
+    "severityIndex",
+]
+FORECAST_ROW_COLUMNS = [
+    "weekIndex",
+    "boroughIndex",
+    "precinctIndex",
+    "offenseTypeIndex",
+    "lawCategoryIndex",
+    "predictedCount",
+    "modelNameIndex",
+]
+
+CUBE_COLUMN_ORDER = [
+    "counts",
+    "weeks",
+    "boroughs",
+    "precincts",
+    "offenses",
+    "laws",
+    "weekRowOffsets",
+]
+CUBE_TYPES = {
+    "counts": "uint32",
+    "weeks": "uint16",
+    "boroughs": "uint8",
+    "precincts": "uint8",
+    "offenses": "uint8",
+    "laws": "uint8",
+    "weekRowOffsets": "uint32",
+}
+CUBE_TYPE_WIDTHS = {"uint32": 4, "uint16": 2, "uint8": 1}
+
+
+class OptionalContractError(ValueError):
+    """A frontend-unsafe optional analytical value or shape."""
+
+
+def require_duckdb() -> Any:
+    try:
+        import duckdb  # type: ignore
+    except ImportError as exc:  # pragma: no cover - environment failure
+        raise SystemExit(
+            "Missing dependency: duckdb. Run in the local virtual environment "
+            "or install the repository requirements."
+        ) from exc
+    return duckdb
+
+
+def sql_string(value: str | Path) -> str:
+    return "'" + str(value).replace("'", "''") + "'"
+
+
+def resolve_path(project_root: Path, value: Path | None, default_relative: Path) -> Path:
+    candidate = default_relative if value is None else value
+    return candidate.resolve() if candidate.is_absolute() else (project_root / candidate).resolve()
+
+
+def fetch_dicts(con: Any, sql: str) -> list[dict[str, Any]]:
+    result = con.execute(sql)
+    names = [column[0] for column in result.description]
+    return [dict(zip(names, row)) for row in result.fetchall()]
+
+
+def iso_date(value: Any) -> str | None:
+    if value is None:
+        return None
+    if isinstance(value, (date, datetime)):
+        return value.date().isoformat() if isinstance(value, datetime) else value.isoformat()
+    return str(value)
+
+
+def compact_number(value: Any, digits: int = 4) -> int | float | None:
+    if value is None:
+        return None
+    number = float(value)
+    if not math.isfinite(number):
+        return None
+    rounded = round(number, digits)
+    return int(rounded) if rounded.is_integer() else rounded
+
+
+def required_number(
+    value: Any,
+    label: str,
+    *,
+    minimum: float | None = None,
+    maximum: float | None = None,
+    integer: bool = False,
+) -> int | float:
+    if value is None or isinstance(value, bool):
+        raise OptionalContractError(f"Invalid required numeric field: {label}.")
+    try:
+        number = float(value)
+    except (TypeError, ValueError) as exc:
+        raise OptionalContractError(
+            f"Invalid required numeric field: {label}."
+        ) from exc
+    if (
+        not math.isfinite(number)
+        or (minimum is not None and number < minimum)
+        or (maximum is not None and number > maximum)
+    ):
+        raise OptionalContractError(f"Invalid required numeric field: {label}.")
+    if integer:
+        if not number.is_integer():
+            raise OptionalContractError(f"Invalid required integer field: {label}.")
+        return int(number)
+    compact = compact_number(number)
+    if compact is None:  # protected by the finite check; retained for contract clarity
+        raise OptionalContractError(f"Invalid required numeric field: {label}.")
+    return compact
+
+
+def required_date(value: Any, label: str) -> str:
+    text = iso_date(value)
+    if text is None:
+        raise OptionalContractError(f"Missing required date field: {label}.")
+    try:
+        date.fromisoformat(text)
+    except ValueError as exc:
+        raise OptionalContractError(f"Invalid required date field: {label}.") from exc
+    return text
+
+
+def required_text(value: Any, label: str) -> str:
+    if value is None or not str(value).strip():
+        raise OptionalContractError(f"Missing required text field: {label}.")
+    return str(value).strip()
+
+
+def validate_unique_records(
+    records: list[dict[str, Any]], key_fields: tuple[str, ...], label: str
+) -> None:
+    seen: set[tuple[Any, ...]] = set()
+    for record in records:
+        key = tuple(record[field] for field in key_fields)
+        if key in seen:
+            raise OptionalContractError(f"Duplicate {label} logical key detected.")
+        seen.add(key)
+
+
+def normalized_string(value: Any, *, nullable: bool = False) -> str | None:
+    if value is None:
+        return None if nullable else "UNKNOWN"
+    text = str(value).strip()
+    if not text:
+        return None if nullable else "UNKNOWN"
+    return text
+
+
+def deterministic_generated_at_utc(max_safe_event_date: date | None) -> str | None:
+    return None if max_safe_event_date is None else f"{max_safe_event_date.isoformat()}T00:00:00Z"
+
+
+def parquet_columns(con: Any, path: Path) -> set[str]:
+    return {
+        str(row[0])
+        for row in con.execute(
+            f"DESCRIBE SELECT * FROM read_parquet({sql_string(path)})"
+        ).fetchall()
+    }
+
+
+def require_parquet_columns(
+    con: Any, path: Path, required: list[str], label: str
+) -> None:
+    if not path.exists():
+        raise FileNotFoundError(f"Required {label} input not found: {path}")
+    missing = sorted(set(required).difference(parquet_columns(con, path)))
+    if missing:
+        raise ValueError(f"{label} input is missing required columns: {', '.join(missing)}")
+
+
+def optional_error(path: Path, reason: str) -> dict[str, Any]:
+    return {
+        "status": "invalid",
+        "sourceFile": path.name,
+        "reason": reason,
+        "records": [],
+    }
+
+
+def little_endian_array_bytes(values: array) -> bytes:
+    if sys.byteorder == "little" or values.itemsize == 1:
+        return values.tobytes()
+    copy = array(values.typecode, values)
+    copy.byteswap()
+    return copy.tobytes()
+
+
+def _missing_optional(path: Path) -> dict[str, Any]:
+    return {"status": "missing", "sourceFile": path.name, "records": []}
+
+
+def load_optional_anomalies(con: Any, path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return _missing_optional(path)
+    try:
+        missing = sorted(set(ANOMALY_REQUIRED_COLUMNS).difference(parquet_columns(con, path)))
+        if missing:
+            return optional_error(path, f"Missing required columns: {missing}")
+        rows = fetch_dicts(
+            con,
+            f"""
+            SELECT
+                week_start,
+                CAST(borough AS VARCHAR) AS borough,
+                CAST(precinct AS VARCHAR) AS precinct,
+                CAST(offense_type AS VARCHAR) AS offense_type,
+                CAST(law_category AS VARCHAR) AS law_category,
+                actual_crime_count,
+                expected_count,
+                CAST(expected_count_source AS VARCHAR) AS expected_count_source,
+                residual_count,
+                anomaly_score,
+                lower(CAST(anomaly_severity AS VARCHAR)) AS severity
+            FROM read_parquet({sql_string(path)})
+            WHERE is_anomaly IS TRUE
+              AND lower(CAST(anomaly_severity AS VARCHAR)) IN ('high', 'critical')
+            ORDER BY
+                CASE lower(CAST(anomaly_severity AS VARCHAR))
+                    WHEN 'critical' THEN 0 ELSE 1
+                END,
+                anomaly_score DESC NULLS LAST,
+                week_start DESC,
+                borough, precinct, offense_type, law_category
+            """,
+        )
+        records = []
+        for row in rows:
+            records.append(
+                {
+                    "week": required_date(row["week_start"], "anomaly week_start"),
+                    "borough": normalized_string(row["borough"]),
+                    "precinct": normalized_string(row["precinct"]),
+                    "offenseType": normalized_string(row["offense_type"]),
+                    "lawCategory": normalized_string(row["law_category"]),
+                    "actualCount": required_number(
+                        row["actual_crime_count"],
+                        "anomaly actual_crime_count",
+                        minimum=0,
+                        integer=True,
+                    ),
+                    "expectedCount": required_number(
+                        row["expected_count"], "anomaly expected_count", minimum=0
+                    ),
+                    "expectedSource": required_text(
+                        row["expected_count_source"], "anomaly expected_count_source"
+                    ),
+                    "residualCount": required_number(
+                        row["residual_count"], "anomaly residual_count"
+                    ),
+                    "score": required_number(
+                        row["anomaly_score"], "anomaly anomaly_score", minimum=0
+                    ),
+                    "severity": required_text(
+                        row["severity"], "anomaly anomaly_severity"
+                    ),
+                }
+            )
+        validate_unique_records(
+            records,
+            ("week", "borough", "precinct", "offenseType", "lawCategory"),
+            "anomaly",
+        )
+        records.sort(
+            key=lambda record: (
+                0 if record["severity"] == "critical" else 1,
+                -float(record["score"]),
+                -date.fromisoformat(record["week"]).toordinal(),
+                record["borough"],
+                record["precinct"],
+                record["offenseType"],
+                record["lawCategory"],
+                -int(record["actualCount"]),
+                -float(record["expectedCount"]),
+                record["expectedSource"],
+                -float(record["residualCount"]),
+            )
+        )
+        return {"status": "available", "sourceFile": path.name, "records": records}
+    except OptionalContractError as exc:
+        return optional_error(path, str(exc))
+    except Exception as exc:  # optional data must not break the Overview
+        return optional_error(path, f"{type(exc).__name__}: input could not be read")
+
+
+def load_optional_hotspots(
+    con: Any, path: Path, safe_event_end_date: date | datetime | str
+) -> dict[str, Any]:
+    if not path.exists():
+        return _missing_optional(path)
+    try:
+        missing = sorted(set(HOTSPOT_REQUIRED_COLUMNS).difference(parquet_columns(con, path)))
+        if missing:
+            return optional_error(path, f"Missing required columns: {missing}")
+        snapshot_stats = fetch_dicts(
+            con,
+            f"""
+            SELECT
+                COUNT(*)::BIGINT AS row_count,
+                COUNT(*) FILTER (WHERE scoring_end_date IS NULL)::BIGINT AS null_dates,
+                COUNT(DISTINCT scoring_end_date)::BIGINT AS distinct_dates,
+                MIN(scoring_end_date) AS min_date,
+                MAX(scoring_end_date) AS max_date
+            FROM read_parquet({sql_string(path)})
+            """,
+        )[0]
+        if snapshot_stats["null_dates"]:
+            raise OptionalContractError("Hotspot snapshot contains a missing scoring date.")
+        if int(snapshot_stats["distinct_dates"]) > 1:
+            raise OptionalContractError(
+                "Hotspot output must contain exactly one scoring snapshot date."
+            )
+        snapshot_date = (
+            required_date(snapshot_stats["max_date"], "hotspot scoring_end_date")
+            if snapshot_stats["row_count"]
+            else None
+        )
+        safe_date = required_date(safe_event_end_date, "maximum safe event date")
+        if snapshot_date is not None and snapshot_date > safe_date:
+            raise OptionalContractError(
+                "Hotspot snapshot date cannot exceed the maximum aggregate-safe event date."
+            )
+        snapshot_age_days = (
+            (date.fromisoformat(safe_date) - date.fromisoformat(snapshot_date)).days
+            if snapshot_date is not None
+            else None
+        )
+
+        rows = fetch_dicts(
+            con,
+            f"""
+            SELECT
+                lower(CAST(hotspot_grain AS VARCHAR)) AS grain,
+                CAST(borough AS VARCHAR) AS borough,
+                CAST(precinct AS VARCHAR) AS precinct,
+                grid_latitude,
+                grid_longitude,
+                CAST(offense_type AS VARCHAR) AS offense_type,
+                CAST(law_category AS VARCHAR) AS law_category,
+                scoring_end_date,
+                recent_event_count,
+                baseline_expected_recent_count,
+                recent_vs_baseline_lift_pct,
+                composite_score,
+                lower(CAST(hotspot_severity AS VARCHAR)) AS severity
+            FROM read_parquet({sql_string(path)})
+            WHERE is_high_or_critical_hotspot IS TRUE
+              AND lower(CAST(hotspot_severity AS VARCHAR)) IN ('high', 'critical')
+            ORDER BY
+                CASE lower(CAST(hotspot_severity AS VARCHAR))
+                    WHEN 'critical' THEN 0 ELSE 1
+                END,
+                composite_score DESC NULLS LAST,
+                hotspot_grain, borough, precinct NULLS LAST, offense_type, law_category
+            """,
+        )
+        records = []
+        for row in rows:
+            grain = required_text(row["grain"], "hotspot hotspot_grain").lower()
+            if grain not in {"grid", "precinct"}:
+                raise OptionalContractError("Unsupported hotspot grain.")
+            precinct = normalized_string(row["precinct"], nullable=True)
+            location_label = None
+            if grain == "grid":
+                latitude = float(
+                    required_number(row["grid_latitude"], "hotspot grid_latitude")
+                )
+                longitude = float(
+                    required_number(row["grid_longitude"], "hotspot grid_longitude")
+                )
+                if not (-90 <= latitude <= 90 and -180 <= longitude <= 180):
+                    raise OptionalContractError("Hotspot grid coordinates are invalid.")
+                location_label = f"GRID {latitude:.3f}, {longitude:.3f}"
+            elif precinct is None:
+                raise OptionalContractError(
+                    "Precinct hotspot is missing its aggregate precinct identifier."
+                )
+            record_date = required_date(
+                row["scoring_end_date"], "hotspot scoring_end_date"
+            )
+            if snapshot_date is not None and record_date != snapshot_date:
+                raise OptionalContractError(
+                    "Hotspot rows do not share the declared snapshot date."
+                )
+            records.append(
+                {
+                    "grain": grain,
+                    "borough": normalized_string(row["borough"]),
+                    "precinct": precinct,
+                    "offenseType": normalized_string(row["offense_type"]),
+                    "lawCategory": normalized_string(row["law_category"]),
+                    "scoringEndDate": record_date,
+                    "locationLabel": location_label,
+                    "recentCount": required_number(
+                        row["recent_event_count"],
+                        "hotspot recent_event_count",
+                        minimum=0,
+                        integer=True,
+                    ),
+                    "expectedRecentCount": required_number(
+                        row["baseline_expected_recent_count"],
+                        "hotspot baseline_expected_recent_count",
+                        minimum=0,
+                    ),
+                    "liftPct": required_number(
+                        row["recent_vs_baseline_lift_pct"],
+                        "hotspot recent_vs_baseline_lift_pct",
+                    ),
+                    "score": required_number(
+                        row["composite_score"],
+                        "hotspot composite_score",
+                        minimum=0,
+                    ),
+                    "severity": required_text(
+                        row["severity"], "hotspot hotspot_severity"
+                    ),
+                }
+            )
+        validate_unique_records(
+            records,
+            (
+                "scoringEndDate",
+                "grain",
+                "borough",
+                "precinct",
+                "locationLabel",
+                "offenseType",
+                "lawCategory",
+            ),
+            "hotspot",
+        )
+        records.sort(
+            key=lambda record: (
+                0 if record["severity"] == "critical" else 1,
+                -float(record["score"]),
+                record["grain"],
+                record["borough"],
+                record["precinct"] or "",
+                record["locationLabel"] or "",
+                record["offenseType"],
+                record["lawCategory"],
+                record["scoringEndDate"],
+                -int(record["recentCount"]),
+                -float(record["expectedRecentCount"]),
+                -float(record["liftPct"]),
+            )
+        )
+        return {
+            "status": "available",
+            "sourceFile": path.name,
+            "records": records,
+            "snapshotDate": snapshot_date,
+            "snapshotAgeDays": snapshot_age_days,
+        }
+    except OptionalContractError as exc:
+        return optional_error(path, str(exc))
+    except Exception as exc:
+        return optional_error(path, f"{type(exc).__name__}: input could not be read")
+
+
+def load_optional_forecasts(con: Any, path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return _missing_optional(path)
+    try:
+        missing = sorted(set(FORECAST_REQUIRED_COLUMNS).difference(parquet_columns(con, path)))
+        if missing:
+            return optional_error(path, f"Missing required columns: {missing}")
+        rows = fetch_dicts(
+            con,
+            f"""
+            SELECT
+                week_start,
+                CAST(borough AS VARCHAR) AS borough,
+                CAST(precinct AS VARCHAR) AS precinct,
+                CAST(offense_type AS VARCHAR) AS offense_type,
+                CAST(law_category AS VARCHAR) AS law_category,
+                predicted_crime_count,
+                CAST(ml_model_name AS VARCHAR) AS model_name
+            FROM read_parquet({sql_string(path)})
+            WHERE is_next_week_forecast IS TRUE
+            ORDER BY week_start, borough, precinct, offense_type, law_category, model_name
+            """,
+        )
+        records = []
+        for row in rows:
+            records.append(
+                {
+                    "week": required_date(row["week_start"], "forecast week_start"),
+                    "borough": normalized_string(row["borough"]),
+                    "precinct": normalized_string(row["precinct"]),
+                    "offenseType": normalized_string(row["offense_type"]),
+                    "lawCategory": normalized_string(row["law_category"]),
+                    "predictedCount": required_number(
+                        row["predicted_crime_count"],
+                        "forecast predicted_crime_count",
+                        minimum=0,
+                    ),
+                    "modelName": required_text(
+                        row["model_name"], "forecast ml_model_name"
+                    ),
+                }
+            )
+        validate_unique_records(
+            records,
+            (
+                "week",
+                "borough",
+                "precinct",
+                "offenseType",
+                "lawCategory",
+                "modelName",
+            ),
+            "forecast",
+        )
+        records.sort(
+            key=lambda record: (
+                record["week"],
+                record["borough"],
+                record["precinct"],
+                record["offenseType"],
+                record["lawCategory"],
+                record["modelName"],
+                float(record["predictedCount"]),
+            )
+        )
+        return {"status": "available", "sourceFile": path.name, "records": records}
+    except OptionalContractError as exc:
+        return optional_error(path, str(exc))
+    except Exception as exc:
+        return optional_error(path, f"{type(exc).__name__}: input could not be read")
+
+
+def read_optional_json(path: Path) -> dict[str, Any]:
+    if not path.exists():
+        return {"status": "missing", "sourceFile": path.name, "data": None}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError("JSON root is not an object")
+        return {"status": "available", "sourceFile": path.name, "data": data}
+    except Exception as exc:
+        return {
+            "status": "invalid",
+            "sourceFile": path.name,
+            "reason": f"{type(exc).__name__}: metadata could not be read",
+            "data": None,
+        }
+
+
+def metadata_version(source: dict[str, Any], *, model: bool = False) -> dict[str, Any]:
+    if source["status"] != "available":
+        result = {"status": source["status"], "sourceFile": source["sourceFile"]}
+        if source.get("reason"):
+            result["reason"] = source["reason"]
+        return result
+    data = source["data"]
+    result: dict[str, Any] = {"status": "available", "sourceFile": source["sourceFile"]}
+    for input_key, output_key in (
+        ("phase", "phase"),
+        ("generated_at_utc", "generatedAtUtc"),
+        ("artifact_type", "artifactType"),
+        ("artifact_version", "artifactVersion"),
+        ("forecast_week", "forecastWeek"),
+    ):
+        if data.get(input_key) is not None:
+            result[output_key] = data[input_key]
+    if model:
+        config = data.get("model") or data.get("model_config") or {}
+        if config.get("model_name") is not None:
+            result["modelName"] = config["model_name"]
+        if config.get("model_version") is not None:
+            result["modelVersion"] = config["model_version"]
+    # Published error context comes from the metrics artifact, whose `overall`
+    # section has one unambiguous selected-model row.  Manifests can contain
+    # several candidate rows and are retained as version metadata only.
+    overall = (data.get("metrics") or {}).get("overall") or []
+    if overall:
+        metric = overall[0]
+        if metric.get("mae") is not None:
+            result["backtestMae"] = compact_number(metric["mae"])
+        if metric.get("rmse") is not None:
+            result["backtestRmse"] = compact_number(metric["rmse"])
+        if metric.get("weighted_mae") is not None:
+            result["backtestWeightedMae"] = compact_number(metric["weighted_mae"])
+        if metric.get("prediction_coverage_pct") is not None:
+            result["predictionCoveragePct"] = compact_number(metric["prediction_coverage_pct"])
+    return result
+
+
+def mandatory_stats(con: Any, clean_path: Path, weekly_path: Path) -> dict[str, Any]:
+    clean = fetch_dicts(
+        con,
+        f"""
+        SELECT
+            COUNT(*)::BIGINT AS source_rows,
+            COUNT(*) FILTER (WHERE is_clean_event_for_aggregate IS TRUE)::BIGINT AS safe_rows,
+            COUNT(*) FILTER (
+                WHERE is_clean_event_for_aggregate IS TRUE
+                  AND complaint_from_date IS NULL
+            )::BIGINT AS safe_rows_missing_date,
+            MIN(complaint_from_date) FILTER (
+                WHERE is_clean_event_for_aggregate IS TRUE
+            ) AS min_safe_date,
+            MAX(complaint_from_date) FILTER (
+                WHERE is_clean_event_for_aggregate IS TRUE
+            ) AS max_safe_date
+        FROM read_parquet({sql_string(clean_path)})
+        """,
+    )[0]
+    if clean["safe_rows_missing_date"]:
+        raise ValueError("Aggregate-safe cleaned events contain missing complaint dates.")
+    weekly = fetch_dicts(
+        con,
+        f"""
+        SELECT
+            COUNT(*)::BIGINT AS source_rows,
+            COALESCE(SUM(crime_count), 0)::HUGEINT AS aggregate_count,
+            MIN(week_start) AS min_week,
+            MAX(week_start) AS max_week,
+            COUNT(*) FILTER (
+                WHERE week_start IS NULL OR borough IS NULL OR precinct IS NULL
+                   OR offense_type IS NULL OR law_category IS NULL
+                   OR crime_count IS NULL OR crime_count < 0
+            )::BIGINT AS invalid_rows,
+            COALESCE(MAX(crime_count), 0)::HUGEINT AS max_count
+        FROM read_parquet({sql_string(weekly_path)})
+        """,
+    )[0]
+    if weekly["invalid_rows"]:
+        raise ValueError("Weekly aggregate contains null dimensions or invalid counts.")
+    if int(weekly["max_count"]) > 4_294_967_295:
+        raise ValueError("Weekly aggregate count exceeds the uint32 cube contract.")
+    if int(clean["safe_rows"]) != int(weekly["aggregate_count"]):
+        raise ValueError(
+            "Aggregate-safe cleaned event count does not reconcile to the weekly "
+            f"aggregate sum ({clean['safe_rows']} != {weekly['aggregate_count']})."
+        )
+    return {
+        "cleanSourceRows": int(clean["source_rows"]),
+        "safeEventCount": int(clean["safe_rows"]),
+        "safeEventStartDate": clean["min_safe_date"],
+        "safeEventEndDate": clean["max_safe_date"],
+        "weeklySourceRows": int(weekly["source_rows"]),
+        "weeklyAggregateCount": int(weekly["aggregate_count"]),
+        "firstWeek": weekly["min_week"],
+        "lastWeek": weekly["max_week"],
+    }
+
+
+def compute_date_range(stats: dict[str, Any]) -> dict[str, Any]:
+    first_week = stats["firstWeek"]
+    last_week = stats["lastWeek"]
+    max_event_date = stats["safeEventEndDate"]
+    if not all((first_week, last_week, max_event_date)):
+        raise ValueError("Overview inputs must contain dated aggregate-safe observations.")
+    latest_is_partial = last_week + timedelta(days=6) > max_event_date
+    latest_complete = last_week - timedelta(weeks=1) if latest_is_partial else last_week
+    default_start = max(first_week, latest_complete - timedelta(weeks=51))
+    return {
+        "safeEventStartDate": iso_date(stats["safeEventStartDate"]),
+        "safeEventEndDate": iso_date(max_event_date),
+        "firstWeek": iso_date(first_week),
+        "lastWeek": iso_date(last_week),
+        "defaultStartWeek": iso_date(default_start),
+        "defaultEndWeek": iso_date(latest_complete),
+        "latestCompleteWeek": iso_date(latest_complete),
+        "latestWeekIsPartial": latest_is_partial,
+    }
+
+
+def weekly_dimension_values(con: Any, weekly_path: Path) -> dict[str, set[str]]:
+    values = {
+        "weeks": set(),
+        "boroughs": set(),
+        "precincts": set(),
+        "offenseTypes": set(),
+        "lawCategories": set(),
+    }
+    rows = con.execute(
+        f"""
+        SELECT DISTINCT
+            week_start,
+            CAST(borough AS VARCHAR),
+            CAST(precinct AS VARCHAR),
+            CAST(offense_type AS VARCHAR),
+            CAST(law_category AS VARCHAR)
+        FROM read_parquet({sql_string(weekly_path)})
+        """
+    ).fetchall()
+    for week, borough, precinct, offense, law in rows:
+        values["weeks"].add(iso_date(week) or "")
+        values["boroughs"].add(normalized_string(borough) or "UNKNOWN")
+        values["precincts"].add(normalized_string(precinct) or "UNKNOWN")
+        values["offenseTypes"].add(normalized_string(offense) or "UNKNOWN")
+        values["lawCategories"].add(normalized_string(law) or "UNKNOWN")
+    return values
+
+
+def build_dimensions(
+    con: Any,
+    weekly_path: Path,
+    anomalies: dict[str, Any],
+    hotspots: dict[str, Any],
+    forecasts: dict[str, Any],
+) -> dict[str, list[str]]:
+    values = weekly_dimension_values(con, weekly_path)
+    severities: set[str] = set()
+    grains: set[str] = set()
+    model_names: set[str] = set()
+    expected_sources: set[str] = set()
+    for source in (anomalies, hotspots, forecasts):
+        if source["status"] != "available":
+            continue
+        for record in source["records"]:
+            if record.get("week"):
+                values["weeks"].add(record["week"])
+            for source_key, dimension_key in (
+                ("borough", "boroughs"),
+                ("precinct", "precincts"),
+                ("offenseType", "offenseTypes"),
+                ("lawCategory", "lawCategories"),
+            ):
+                if record.get(source_key) is not None:
+                    values[dimension_key].add(record[source_key])
+            if record.get("severity"):
+                severities.add(record["severity"])
+            if record.get("grain"):
+                grains.add(record["grain"])
+            if record.get("modelName"):
+                model_names.add(record["modelName"])
+            if record.get("expectedSource"):
+                expected_sources.add(record["expectedSource"])
+    dimensions = {key: sorted(item) for key, item in values.items()}
+    dimensions.update(
+        {
+            "severities": sorted(severities),
+            "hotspotGrains": sorted(grains),
+            "modelNames": sorted(model_names),
+            "anomalyExpectedSources": sorted(expected_sources),
+        }
+    )
+    for name in ("boroughs", "precincts", "offenseTypes", "lawCategories"):
+        if len(dimensions[name]) >= 256:
+            raise ValueError(f"Dimension {name} exceeds the uint8 cube contract.")
+    if len(dimensions["weeks"]) >= 65_536:
+        raise ValueError("Week dimension exceeds the uint16 cube contract.")
+    return dimensions
+
+
+def build_precinct_filter_index(
+    con: Any, weekly_path: Path, dimensions: dict[str, list[str]]
+) -> dict[str, Any]:
+    rows = fetch_dicts(
+        con,
+        f"""
+        SELECT
+            CAST(borough AS VARCHAR) AS borough,
+            CAST(precinct AS VARCHAR) AS precinct,
+            SUM(crime_count)::HUGEINT AS crime_count
+        FROM read_parquet({sql_string(weekly_path)})
+        GROUP BY borough, precinct
+        ORDER BY precinct, crime_count DESC, borough
+        """,
+    )
+    borough_values = dimensions["boroughs"]
+    precinct_values = dimensions["precincts"]
+    borough_indexes = {value: index for index, value in enumerate(borough_values)}
+    precinct_indexes = {value: index for index, value in enumerate(precinct_values)}
+    canonical: dict[str, str] = {}
+    unknown_precinct_boroughs: set[str] = set()
+    for row in rows:
+        borough = normalized_string(row["borough"]) or "UNKNOWN"
+        precinct = normalized_string(row["precinct"]) or "UNKNOWN"
+        if precinct == "UNKNOWN":
+            if int(row["crime_count"]) > 0:
+                unknown_precinct_boroughs.add(borough)
+            continue
+        if precinct not in canonical:
+            canonical[precinct] = borough
+    by_borough: dict[str, list[str]] = {borough: [] for borough in borough_values}
+    for precinct, borough in canonical.items():
+        by_borough.setdefault(borough, []).append(precinct)
+    if "UNKNOWN" in precinct_indexes:
+        for borough in unknown_precinct_boroughs:
+            by_borough.setdefault(borough, []).append("UNKNOWN")
+    indexed_rows = [
+        [
+            borough_indexes[borough],
+            sorted(precinct_indexes[value] for value in by_borough.get(borough, [])),
+        ]
+        for borough in borough_values
+    ]
+    return {
+        "rowColumns": ["boroughIndex", "precinctIndexes"],
+        "rows": indexed_rows,
+        "knownPrecinctPolicy": (
+            "Each known precinct is assigned to the borough with its largest all-time "
+            "weekly aggregate count; ties use borough lexical order."
+        ),
+        "unknownPrecinctPolicy": (
+            "UNKNOWN is listed only for boroughs with observed UNKNOWN-precinct counts."
+        ),
+    }
+
+
+def index_optional_signals(
+    dimensions: dict[str, list[str]],
+    anomalies: dict[str, Any],
+    hotspots: dict[str, Any],
+    forecasts: dict[str, Any],
+) -> dict[str, Any]:
+    indexes = {
+        name: {value: index for index, value in enumerate(values)}
+        for name, values in dimensions.items()
+    }
+
+    anomaly_rows: list[list[Any]] = []
+    anomaly_counts = {"high": 0, "critical": 0}
+    if anomalies["status"] == "available":
+        for record in anomalies["records"]:
+            anomaly_counts[record["severity"]] += 1
+            anomaly_rows.append(
+                [
+                    indexes["weeks"][record["week"]],
+                    indexes["boroughs"][record["borough"]],
+                    indexes["precincts"][record["precinct"]],
+                    indexes["offenseTypes"][record["offenseType"]],
+                    indexes["lawCategories"][record["lawCategory"]],
+                    record["actualCount"],
+                    record["expectedCount"],
+                    record["residualCount"],
+                    record["score"],
+                    indexes["severities"][record["severity"]],
+                    indexes["anomalyExpectedSources"][record["expectedSource"]],
+                ]
+            )
+    anomaly_signal = {
+        "status": anomalies["status"],
+        "sourceFile": anomalies["sourceFile"],
+        "rowColumns": ANOMALY_ROW_COLUMNS,
+        "rows": anomaly_rows,
+        "summary": {
+            "rowCount": len(anomaly_rows),
+            "highCount": anomaly_counts["high"],
+            "criticalCount": anomaly_counts["critical"],
+        },
+    }
+
+    hotspot_rows: list[list[Any]] = []
+    hotspot_counts = {"high": 0, "critical": 0}
+    if hotspots["status"] == "available":
+        for record in hotspots["records"]:
+            hotspot_counts[record["severity"]] += 1
+            hotspot_rows.append(
+                [
+                    indexes["hotspotGrains"][record["grain"]],
+                    indexes["boroughs"][record["borough"]],
+                    None
+                    if record["precinct"] is None
+                    else indexes["precincts"][record["precinct"]],
+                    indexes["offenseTypes"][record["offenseType"]],
+                    indexes["lawCategories"][record["lawCategory"]],
+                    record["scoringEndDate"],
+                    record["locationLabel"],
+                    record["recentCount"],
+                    record["expectedRecentCount"],
+                    record["liftPct"],
+                    record["score"],
+                    indexes["severities"][record["severity"]],
+                ]
+            )
+    hotspot_signal = {
+        "status": hotspots["status"],
+        "sourceFile": hotspots["sourceFile"],
+        "rowColumns": HOTSPOT_ROW_COLUMNS,
+        "rows": hotspot_rows,
+        "summary": {
+            "rowCount": len(hotspot_rows),
+            "highCount": hotspot_counts["high"],
+            "criticalCount": hotspot_counts["critical"],
+            "snapshotDate": hotspots.get("snapshotDate"),
+            "snapshotAgeDays": hotspots.get("snapshotAgeDays"),
+        },
+    }
+
+    forecast_rows: list[list[Any]] = []
+    predicted_total = 0.0
+    if forecasts["status"] == "available":
+        for record in forecasts["records"]:
+            predicted = float(record["predictedCount"])
+            predicted_total += predicted
+            forecast_rows.append(
+                [
+                    indexes["weeks"][record["week"]],
+                    indexes["boroughs"][record["borough"]],
+                    indexes["precincts"][record["precinct"]],
+                    indexes["offenseTypes"][record["offenseType"]],
+                    indexes["lawCategories"][record["lawCategory"]],
+                    record["predictedCount"],
+                    indexes["modelNames"][record["modelName"]],
+                ]
+            )
+    forecast_signal = {
+        "status": forecasts["status"],
+        "sourceFile": forecasts["sourceFile"],
+        "rowColumns": FORECAST_ROW_COLUMNS,
+        "rows": forecast_rows,
+        "summary": {
+            "rowCount": len(forecast_rows),
+            "forecastWeeks": sorted(
+                {record["week"] for record in forecasts.get("records", [])}
+            ),
+            "predictedEventCount": compact_number(predicted_total),
+        },
+    }
+    for signal, source in (
+        (anomaly_signal, anomalies),
+        (hotspot_signal, hotspots),
+        (forecast_signal, forecasts),
+    ):
+        if source.get("reason"):
+            signal["reason"] = source["reason"]
+    return {
+        "anomalies": anomaly_signal,
+        "hotspots": hotspot_signal,
+        "forecast": forecast_signal,
+    }
+
+
+def build_cube(
+    con: Any, weekly_path: Path, dimensions: dict[str, list[str]]
+) -> tuple[bytes, dict[str, Any]]:
+    indexes = {
+        name: {value: index for index, value in enumerate(values)}
+        for name, values in dimensions.items()
+    }
+    columns = {
+        "counts": array("I"),
+        "weeks": array("H"),
+        "boroughs": array("B"),
+        "precincts": array("B"),
+        "offenses": array("B"),
+        "laws": array("B"),
+    }
+    cursor = con.execute(
+        f"""
+        SELECT
+            week_start,
+            CAST(borough AS VARCHAR) AS borough,
+            CAST(precinct AS VARCHAR) AS precinct,
+            CAST(offense_type AS VARCHAR) AS offense_type,
+            CAST(law_category AS VARCHAR) AS law_category,
+            SUM(crime_count)::HUGEINT AS crime_count
+        FROM read_parquet({sql_string(weekly_path)})
+        GROUP BY week_start, borough, precinct, offense_type, law_category
+        ORDER BY week_start, borough, precinct, offense_type, law_category
+        """
+    )
+    while True:
+        batch = cursor.fetchmany(50_000)
+        if not batch:
+            break
+        for week, borough, precinct, offense, law, count in batch:
+            count = int(count)
+            if not 0 <= count <= 4_294_967_295:
+                raise ValueError("Cube count is outside the uint32 range.")
+            columns["counts"].append(count)
+            columns["weeks"].append(indexes["weeks"][iso_date(week)])
+            columns["boroughs"].append(indexes["boroughs"][str(borough)])
+            columns["precincts"].append(indexes["precincts"][str(precinct)])
+            columns["offenses"].append(indexes["offenseTypes"][str(offense)])
+            columns["laws"].append(indexes["lawCategories"][str(law)])
+    row_count = len(columns["counts"])
+    observed_week_count = len(
+        {index for index in columns["weeks"]}
+    )
+    week_counts = [0] * observed_week_count
+    for week_index in columns["weeks"]:
+        if week_index >= observed_week_count:
+            raise ValueError("Observed cube week indexes must precede forecast-only weeks.")
+        week_counts[week_index] += 1
+    offsets = array("I", [0])
+    running = 0
+    for count in week_counts:
+        running += count
+        offsets.append(running)
+    if running != row_count:
+        raise ValueError("Week row offsets do not reconcile to the cube row count.")
+    columns["weekRowOffsets"] = offsets
+
+    dimension_for = {
+        "weeks": "weeks",
+        "boroughs": "boroughs",
+        "precincts": "precincts",
+        "offenses": "offenseTypes",
+        "laws": "lawCategories",
+    }
+    metadata_columns: dict[str, Any] = {}
+    chunks: list[bytes] = []
+    offset_bytes = 0
+    for name in CUBE_COLUMN_ORDER:
+        chunk = little_endian_array_bytes(columns[name])
+        descriptor: dict[str, Any] = {
+            "type": CUBE_TYPES[name],
+            "offsetBytes": offset_bytes,
+            "byteLength": len(chunk),
+            "length": len(columns[name]),
+        }
+        if name in dimension_for:
+            descriptor["dimension"] = dimension_for[name]
+        if name == "weekRowOffsets":
+            descriptor["semantics"] = (
+                "Start row for each observed week, followed by terminal rowCount."
+            )
+            descriptor["observedWeekCount"] = observed_week_count
+        metadata_columns[name] = descriptor
+        chunks.append(chunk)
+        offset_bytes += len(chunk)
+    uncompressed = b"".join(chunks)
+    buffer = io.BytesIO()
+    with gzip.GzipFile(filename="", mode="wb", fileobj=buffer, compresslevel=9, mtime=0) as stream:
+        stream.write(uncompressed)
+    compressed = buffer.getvalue()
+    return compressed, {
+        "encoding": "columnar-arrays-v1",
+        "compression": "gzip",
+        "byteOrder": "little-endian",
+        "rowCount": row_count,
+        "observedWeekCount": observed_week_count,
+        "columnOrder": CUBE_COLUMN_ORDER,
+        "columns": metadata_columns,
+        "uncompressedByteLength": len(uncompressed),
+        "compressedByteLength": len(compressed),
+        "uncompressedBytes": len(uncompressed),
+        "compressedBytes": len(compressed),
+    }
+
+
+def _historical_error_context(
+    ml_metrics: dict[str, Any],
+    ml_manifest: dict[str, Any],
+    forecasts: dict[str, Any],
+) -> dict[str, Any]:
+    version = metadata_version(ml_metrics)
+    if version["status"] != "available":
+        result = {"status": version["status"]}
+        if version.get("reason"):
+            result["reason"] = version["reason"]
+        return result
+    if ml_manifest["status"] != "available" or forecasts["status"] != "available":
+        return {
+            "status": "invalid",
+            "reason": "Historical error context cannot be aligned to an available forecast.",
+        }
+    try:
+        data = ml_metrics.get("data") or {}
+        manifest = ml_manifest.get("data") or {}
+        metric_model_config = data.get("model_config") or data.get("model") or {}
+        manifest_model_config = manifest.get("model") or manifest.get("model_config") or {}
+        metric_model_name = required_text(
+            metric_model_config.get("model_name"), "ML metrics model_name"
+        )
+        manifest_model_name = required_text(
+            manifest_model_config.get("model_name"), "ML manifest model_name"
+        )
+        metric_week = required_date(
+            (data.get("analysis_window") or {}).get("next_week_forecast_week")
+            or data.get("forecast_week"),
+            "ML metrics forecast week",
+        )
+        manifest_week = required_date(
+            manifest.get("forecast_week"), "ML manifest forecast week"
+        )
+        forecast_models = sorted(
+            {record["modelName"] for record in forecasts.get("records", [])}
+        )
+        forecast_weeks = sorted(
+            {record["week"] for record in forecasts.get("records", [])}
+        )
+        if (
+            forecast_models != [metric_model_name]
+            or metric_model_name != manifest_model_name
+            or forecast_weeks != [metric_week]
+            or metric_week != manifest_week
+        ):
+            raise OptionalContractError(
+                "Historical error metrics do not match the published forecast model and week."
+            )
+
+        overall = (data.get("metrics") or {}).get("overall") or []
+        if len(overall) != 1 or not isinstance(overall[0], dict):
+            raise OptionalContractError(
+                "Historical error metrics require one unambiguous overall backtest row."
+            )
+        metric = overall[0]
+        context: dict[str, Any] = {
+            "status": "available",
+            "unit": "reported events per segment-week",
+            "scope": "overall model backtest across all segments",
+            "filterSemantics": "Historical errors are not recomputed for active dashboard filters.",
+            "modelName": metric_model_name,
+            "forecastWeek": metric_week,
+            "mae": required_number(metric.get("mae"), "ML metrics MAE", minimum=0),
+            "rmse": required_number(metric.get("rmse"), "ML metrics RMSE", minimum=0),
+            "predictionCoveragePct": required_number(
+                metric.get("prediction_coverage_pct"),
+                "ML metrics prediction coverage",
+                minimum=0,
+                maximum=100,
+            ),
+        }
+        if metric.get("weighted_mae") is not None:
+            context["weightedMae"] = required_number(
+                metric["weighted_mae"], "ML metrics weighted MAE", minimum=0
+            )
+        return context
+    except OptionalContractError as exc:
+        return {"status": "invalid", "reason": str(exc)}
+
+
+def gate_forecast_with_manifest(
+    forecasts: dict[str, Any],
+    ml_manifest: dict[str, Any],
+    last_observed_week: date | datetime | str,
+) -> dict[str, Any]:
+    """Publish only one manifest-aligned, strictly future forecast horizon."""
+    if forecasts["status"] != "available":
+        return forecasts
+    if ml_manifest["status"] != "available":
+        reason = (
+            "Forecast withheld because the ML model manifest is "
+            f"{ml_manifest['status']}; leakage controls cannot be verified."
+        )
+        return optional_error(Path(forecasts["sourceFile"]), reason)
+    controls = (ml_manifest.get("data") or {}).get("leakage_controls") or {}
+    safe = (
+        controls.get("random_splits_used") is False
+        and controls.get("target_week_excluded_from_features") is True
+    )
+    if not safe:
+        return optional_error(
+            Path(forecasts["sourceFile"]),
+            (
+                "Forecast withheld because the ML manifest does not verify time-based "
+                "leakage controls (random_splits_used=false and "
+                "target_week_excluded_from_features=true)."
+            ),
+        )
+
+    records = forecasts.get("records") or []
+    forecast_weeks = sorted({record["week"] for record in records})
+    model_names = sorted({record["modelName"] for record in records})
+    manifest = ml_manifest.get("data") or {}
+    manifest_model = manifest.get("model") or manifest.get("model_config") or {}
+    manifest_week = manifest.get("forecast_week")
+    manifest_model_name = manifest_model.get("model_name")
+    last_observed_week_iso = iso_date(last_observed_week)
+
+    alignment_errors: list[str] = []
+    if len(forecast_weeks) != 1:
+        alignment_errors.append("exactly one forecast week is required")
+    elif forecast_weeks[0] <= last_observed_week_iso:
+        alignment_errors.append("the forecast week must follow the last observed week")
+    if len(model_names) != 1:
+        alignment_errors.append("exactly one forecast model is required")
+    if manifest_week is None or forecast_weeks != [str(manifest_week)]:
+        alignment_errors.append("the prediction week must match the ML manifest")
+    if manifest_model_name is None or model_names != [str(manifest_model_name)]:
+        alignment_errors.append("the prediction model must match the ML manifest")
+    if alignment_errors:
+        return optional_error(
+            Path(forecasts["sourceFile"]),
+            "Forecast withheld because " + "; ".join(alignment_errors) + ".",
+        )
+    return forecasts
+
+
+def build_dashboard_overview(
+    *,
+    clean_events_path: Path,
+    weekly_path: Path,
+    overview_output_path: Path,
+    cube_output_path: Path,
+    anomalies_path: Path,
+    hotspots_path: Path,
+    ml_predictions_path: Path,
+    anomaly_metrics_path: Path,
+    hotspot_metrics_path: Path,
+    ml_metrics_path: Path,
+    ml_manifest_path: Path,
+    baseline_manifest_path: Path,
+    threads: int = 4,
+) -> dict[str, Any]:
+    duckdb = require_duckdb()
+    con = duckdb.connect(database=":memory:")
+    con.execute(f"PRAGMA threads={max(1, int(threads))}")
+    require_parquet_columns(con, clean_events_path, CLEAN_REQUIRED_COLUMNS, "clean events")
+    require_parquet_columns(con, weekly_path, WEEKLY_REQUIRED_COLUMNS, "weekly area")
+
+    stats = mandatory_stats(con, clean_events_path, weekly_path)
+    anomalies = load_optional_anomalies(con, anomalies_path)
+    hotspots = load_optional_hotspots(con, hotspots_path, stats["safeEventEndDate"])
+    forecasts = load_optional_forecasts(con, ml_predictions_path)
+    anomaly_metrics = read_optional_json(anomaly_metrics_path)
+    hotspot_metrics = read_optional_json(hotspot_metrics_path)
+    ml_metrics = read_optional_json(ml_metrics_path)
+    ml_manifest = read_optional_json(ml_manifest_path)
+    baseline_manifest = read_optional_json(baseline_manifest_path)
+
+    forecasts = gate_forecast_with_manifest(forecasts, ml_manifest, stats["lastWeek"])
+
+    dimensions = build_dimensions(con, weekly_path, anomalies, hotspots, forecasts)
+    signals = index_optional_signals(dimensions, anomalies, hotspots, forecasts)
+    signals["forecast"]["summary"]["historicalError"] = _historical_error_context(
+        ml_metrics, ml_manifest, forecasts
+    )
+    signals["forecast"]["summary"]["limitations"] = [
+        (
+            "No prediction interval or other uncertainty interval is available; only "
+            "a point estimate is supplied."
+        ),
+        "The forecast horizon follows a source extract whose latest observed week may be partial.",
+    ]
+    compressed_cube, cube = build_cube(con, weekly_path, dimensions)
+    cube["path"] = f"/data/{CUBE_FILE}"
+    versions = {
+        "dashboardContract": SCHEMA_VERSION,
+        "anomalyMetrics": metadata_version(anomaly_metrics),
+        "hotspotMetrics": metadata_version(hotspot_metrics),
+        "mlMetrics": metadata_version(ml_metrics),
+        "mlManifest": metadata_version(ml_manifest, model=True),
+        "baselineManifest": metadata_version(baseline_manifest),
+    }
+    date_range = compute_date_range(stats)
+    payload = {
+        "schemaVersion": SCHEMA_VERSION,
+        "generatedAtUtc": deterministic_generated_at_utc(stats["safeEventEndDate"]),
+        "application": {
+            "name": "NYC Crime Intelligence",
+            "phase": "Phase 7A",
+            "view": "Overview",
+        },
+        "dataRange": date_range,
+        "observed": {
+            "safeEventCount": stats["safeEventCount"],
+            "weeklyAggregateCount": stats["weeklyAggregateCount"],
+            "unit": "reported aggregate complaint events",
+            "dateFilterSemantics": (
+                "Inclusive week_start range over Monday-based weekly aggregate buckets."
+            ),
+            "latestWeekNote": (
+                "The latest week is retained for freshness but excluded from the "
+                "default range and comparisons when incomplete."
+            ),
+            "comparisonSemantics": (
+                "Compare the most recent four complete selected weeks with the prior "
+                "four complete selected weeks, or equal shorter windows when fewer than "
+                "eight complete selected weeks are available; never include later observations."
+            ),
+        },
+        "dimensions": dimensions,
+        "filterIndex": {
+            "precinctsByBorough": build_precinct_filter_index(
+                con, weekly_path, dimensions
+            )
+        },
+        "cube": cube,
+        "signals": signals,
+        "versions": versions,
+        "dataQuality": {
+            "cleanSourceRowCount": stats["cleanSourceRows"],
+            "aggregateSafeEventCount": stats["safeEventCount"],
+            "excludedEventCount": stats["cleanSourceRows"] - stats["safeEventCount"],
+            "weeklySourceRowCount": stats["weeklySourceRows"],
+            "weeklyAggregateCount": stats["weeklyAggregateCount"],
+            "countsReconciled": stats["safeEventCount"] == stats["weeklyAggregateCount"],
+            "cubeRowCount": cube["rowCount"],
+            "safeRowsOnly": True,
+            "dateBasis": (
+                "Dates and generatedAtUtc use the maximum aggregate-safe cleaned event "
+                "date, never the current clock."
+            ),
+        },
+        "ethics": {
+            "aggregateTrendIntelligenceOnly": True,
+            "eventRecordsIncluded": False,
+            "demographicAttributesIncluded": False,
+            "personLevelScoring": False,
+            "enforcementRecommendations": False,
+            "patrolRecommendations": False,
+        },
+        "limitations": [
+            "Counts describe reported aggregate complaint events and do not explain causality.",
+            "The latest source week can be partial and is excluded from default comparisons.",
+            "Reporting delays, classification changes, and later revisions can change counts.",
+            (
+                "Anomalies are observed deviations, hotspots are aggregate concentration "
+                "signals, and forecasts are model estimates; these are distinct measures."
+            ),
+            (
+                "Outputs are decision-support context and are not grounds for person-level "
+                "or enforcement action."
+            ),
+            "Forecast outputs do not include uncertainty intervals and may follow a partial source week.",
+        ],
+    }
+    validate_overview_payload(payload)
+    overview_output_path.parent.mkdir(parents=True, exist_ok=True)
+    cube_output_path.parent.mkdir(parents=True, exist_ok=True)
+    cube_output_path.write_bytes(compressed_cube)
+    overview_output_path.write_text(
+        json.dumps(
+            payload,
+            ensure_ascii=False,
+            allow_nan=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        + "\n",
+        encoding="utf-8",
+    )
+    return payload
+
+
+def validate_overview_payload(payload: dict[str, Any]) -> None:
+    required = {
+        "schemaVersion",
+        "generatedAtUtc",
+        "application",
+        "dataRange",
+        "observed",
+        "dimensions",
+        "filterIndex",
+        "cube",
+        "signals",
+        "versions",
+        "dataQuality",
+        "ethics",
+        "limitations",
+    }
+    missing = sorted(required.difference(payload))
+    if missing:
+        raise ValueError(f"Overview payload is missing required sections: {missing}")
+    if payload["schemaVersion"] != SCHEMA_VERSION:
+        raise ValueError("Unexpected Overview schema version.")
+    for name, values in payload["dimensions"].items():
+        if not isinstance(values, list) or values != sorted(values):
+            raise ValueError(f"Dimension {name} must be a sorted list.")
+        if not all(isinstance(value, str) for value in values):
+            raise ValueError(f"Dimension {name} contains a non-string value.")
+    for week in payload["dimensions"]["weeks"]:
+        date.fromisoformat(week)
+    cube = payload["cube"]
+    if cube["columnOrder"] != CUBE_COLUMN_ORDER:
+        raise ValueError("Cube columns are not in the required order.")
+    offset = 0
+    for name in CUBE_COLUMN_ORDER:
+        column = cube["columns"].get(name)
+        if not column or column["type"] != CUBE_TYPES[name]:
+            raise ValueError(f"Invalid cube column metadata for {name}.")
+        expected_length = (
+            cube["observedWeekCount"] + 1
+            if name == "weekRowOffsets"
+            else cube["rowCount"]
+        )
+        if column["offsetBytes"] != offset or column["length"] != expected_length:
+            raise ValueError(f"Invalid cube offset or length for {name}.")
+        expected_bytes = expected_length * CUBE_TYPE_WIDTHS[column["type"]]
+        if column["byteLength"] != expected_bytes:
+            raise ValueError(f"Invalid cube byte length for {name}.")
+        offset += expected_bytes
+    if offset != cube["uncompressedByteLength"]:
+        raise ValueError("Cube uncompressed byte length does not match its columns.")
+    if payload["observed"]["safeEventCount"] != payload["observed"]["weeklyAggregateCount"]:
+        raise ValueError("Observed event and weekly aggregate counts do not reconcile.")
+    for family in ("anomalies", "hotspots", "forecast"):
+        signal = payload["signals"].get(family)
+        if not signal or signal.get("status") not in {"available", "missing", "invalid"}:
+            raise ValueError(f"Invalid optional signal status for {family}.")
+        if signal["status"] != "available" and signal["rows"]:
+            raise ValueError(f"Unavailable optional signal {family} contains rows.")
+    serialized = json.dumps(payload, allow_nan=False).upper()
+    leaked = [column for column in SENSITIVE_COLUMNS if column in serialized]
+    if leaked:
+        raise ValueError(f"Sensitive demographic fields leaked into Overview payload: {leaked}")
+
+
+def decode_cube(payload: dict[str, Any], compressed_bytes: bytes) -> dict[str, list[int]]:
+    raw = gzip.decompress(compressed_bytes)
+    cube = payload["cube"]
+    if len(raw) != cube["uncompressedByteLength"]:
+        raise ValueError("Cube byte length does not match Overview metadata.")
+    decoded: dict[str, list[int]] = {}
+    for name in cube["columnOrder"]:
+        descriptor = cube["columns"][name]
+        chunk = raw[
+            descriptor["offsetBytes"] : descriptor["offsetBytes"]
+            + descriptor["byteLength"]
+        ]
+        type_name = descriptor["type"]
+        type_code = {"uint8": "B", "uint16": "H", "uint32": "I"}[type_name]
+        values = array(type_code)
+        values.frombytes(chunk)
+        if sys.byteorder != "little" and values.itemsize > 1:
+            values.byteswap()
+        decoded[name] = list(values)
+    return decoded
+
+
+def aggregate_cube(
+    payload: dict[str, Any],
+    compressed_bytes: bytes,
+    *,
+    start_week: str | None = None,
+    end_week: str | None = None,
+    borough: str | None = None,
+    precinct: str | None = None,
+    offense_type: str | None = None,
+    law_category: str | None = None,
+) -> int:
+    decoded = decode_cube(payload, compressed_bytes)
+    dimensions = payload["dimensions"]
+    requested = {
+        "boroughs": borough,
+        "precincts": precinct,
+        "offenseTypes": offense_type,
+        "lawCategories": law_category,
+    }
+    selected: dict[str, int | None] = {}
+    for name, value in requested.items():
+        if value is None:
+            selected[name] = None
+        elif value not in dimensions[name]:
+            return 0
+        else:
+            selected[name] = dimensions[name].index(value)
+    total = 0
+    for row_index, count in enumerate(decoded["counts"]):
+        week = dimensions["weeks"][decoded["weeks"][row_index]]
+        if start_week is not None and week < start_week:
+            continue
+        if end_week is not None and week > end_week:
+            continue
+        if selected["boroughs"] is not None and decoded["boroughs"][row_index] != selected["boroughs"]:
+            continue
+        if selected["precincts"] is not None and decoded["precincts"][row_index] != selected["precincts"]:
+            continue
+        if selected["offenseTypes"] is not None and decoded["offenses"][row_index] != selected["offenseTypes"]:
+            continue
+        if selected["lawCategories"] is not None and decoded["laws"][row_index] != selected["lawCategories"]:
+            continue
+        total += count
+    return total
+
+
+def parse_args() -> argparse.Namespace:
+    parser = argparse.ArgumentParser(
+        description="Generate the Phase 7A dashboard Overview JSON and binary cube."
+    )
+    parser.add_argument("--project-root", type=Path, default=Path.cwd())
+    parser.add_argument("--processed-dir", type=Path, default=None)
+    parser.add_argument("--dashboard-data-dir", type=Path, default=None)
+    parser.add_argument("--clean-events", type=Path, default=None)
+    parser.add_argument("--weekly-area", type=Path, default=None)
+    parser.add_argument("--anomalies", type=Path, default=None)
+    parser.add_argument("--hotspots", type=Path, default=None)
+    parser.add_argument("--ml-predictions", type=Path, default=None)
+    parser.add_argument("--anomaly-metrics", type=Path, default=None)
+    parser.add_argument("--hotspot-metrics", type=Path, default=None)
+    parser.add_argument("--ml-metrics", type=Path, default=None)
+    parser.add_argument("--ml-manifest", type=Path, default=None)
+    parser.add_argument("--baseline-manifest", type=Path, default=None)
+    parser.add_argument("--overview-output", type=Path, default=None)
+    parser.add_argument("--cube-output", type=Path, default=None)
+    parser.add_argument(
+        "--skip-dashboard-copy",
+        action="store_true",
+        help="Write canonical processed outputs without copying them into dashboard/public/data.",
+    )
+    parser.add_argument(
+        "--threads", type=int, default=max(1, min(4, os.cpu_count() or 1))
+    )
+    return parser.parse_args()
+
+
+def main() -> None:
+    args = parse_args()
+    project_root = args.project_root.resolve()
+    processed_dir = resolve_path(
+        project_root, args.processed_dir, DEFAULT_PROCESSED_DIR
+    )
+    dashboard_data_dir = resolve_path(
+        project_root, args.dashboard_data_dir, DEFAULT_DASHBOARD_DATA_DIR
+    )
+    overview_output = resolve_path(
+        project_root,
+        args.overview_output,
+        processed_dir / PROCESSED_OVERVIEW_FILE,
+    )
+    cube_output = resolve_path(
+        project_root,
+        args.cube_output,
+        processed_dir / PROCESSED_CUBE_FILE,
+    )
+    payload = build_dashboard_overview(
+        clean_events_path=resolve_path(
+            project_root, args.clean_events, processed_dir / CLEAN_EVENTS_FILE
+        ),
+        weekly_path=resolve_path(
+            project_root, args.weekly_area, processed_dir / WEEKLY_FILE
+        ),
+        anomalies_path=resolve_path(
+            project_root, args.anomalies, processed_dir / ANOMALIES_FILE
+        ),
+        hotspots_path=resolve_path(
+            project_root, args.hotspots, processed_dir / HOTSPOTS_FILE
+        ),
+        ml_predictions_path=resolve_path(
+            project_root, args.ml_predictions, processed_dir / ML_PREDICTIONS_FILE
+        ),
+        anomaly_metrics_path=resolve_path(
+            project_root, args.anomaly_metrics, processed_dir / ANOMALY_METRICS_FILE
+        ),
+        hotspot_metrics_path=resolve_path(
+            project_root, args.hotspot_metrics, processed_dir / HOTSPOT_METRICS_FILE
+        ),
+        ml_metrics_path=resolve_path(
+            project_root, args.ml_metrics, processed_dir / ML_METRICS_FILE
+        ),
+        ml_manifest_path=resolve_path(
+            project_root,
+            args.ml_manifest,
+            DEFAULT_MODEL_DIR / MODEL_MANIFEST_FILE,
+        ),
+        baseline_manifest_path=resolve_path(
+            project_root,
+            args.baseline_manifest,
+            DEFAULT_BASELINE_MODEL_DIR / MODEL_MANIFEST_FILE,
+        ),
+        overview_output_path=overview_output,
+        cube_output_path=cube_output,
+        threads=args.threads,
+    )
+    if not args.skip_dashboard_copy:
+        dashboard_data_dir.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(overview_output, dashboard_data_dir / OVERVIEW_FILE)
+        shutil.copyfile(cube_output, dashboard_data_dir / CUBE_FILE)
+    print(
+        "Built Phase 7A Overview data: "
+        f"{payload['cube']['rowCount']:,} cube rows, "
+        f"{payload['observed']['safeEventCount']:,} aggregate-safe events."
+    )
+    print(f"Canonical metadata: {overview_output}")
+    print(f"Canonical cube: {cube_output}")
+    if not args.skip_dashboard_copy:
+        print(f"Frontend data: {dashboard_data_dir}")
+
+
+if __name__ == "__main__":
+    main()

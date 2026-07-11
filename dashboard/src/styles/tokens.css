@@ -1,0 +1,101 @@
+:root {
+  color-scheme: dark;
+
+  --color-ink-1000: #07090a;
+  --color-ink-950: #0a0d0f;
+  --color-ink-900: #0e1215;
+  --color-charcoal-850: #12171a;
+  --color-charcoal-800: #171d21;
+  --color-gunmetal-700: #263038;
+  --color-gunmetal-600: #354149;
+  --color-steel-500: #53616a;
+  --color-steel-400: #7b888f;
+  --color-concrete-300: #aab2b5;
+  --color-offwhite-200: #d6d9d8;
+  --color-offwhite-100: #eef0ed;
+
+  --color-cyan-500: #5e9da7;
+  --color-cyan-400: #75b1ba;
+  --color-cyan-300: #9cc6cc;
+  --color-cyan-muted: #31535a;
+  --color-amber-500: #bd8a3c;
+  --color-amber-400: #d1a35e;
+  --color-amber-muted: #58401f;
+  --color-red-500: #a64d4d;
+  --color-red-400: #c56868;
+  --color-red-muted: #54282a;
+
+  --surface-page: var(--color-ink-950);
+  --surface-header: var(--color-ink-1000);
+  --surface-header-overlay: rgba(7, 9, 10, 0.84);
+  --surface-toolbar: var(--color-charcoal-850);
+  --surface-panel: var(--color-charcoal-800);
+  --surface-panel-raised: #1b2226;
+  --surface-control: var(--color-ink-900);
+  --surface-hover: #20282d;
+  --surface-critical: #251719;
+  --surface-warning: #241d13;
+  --surface-analytical: #122024;
+
+  --text-primary: var(--color-offwhite-100);
+  --text-secondary: var(--color-concrete-300);
+  --text-muted: var(--color-steel-400);
+  --text-inverse: var(--color-ink-1000);
+
+  --border-subtle: var(--color-gunmetal-700);
+  --border-strong: var(--color-gunmetal-600);
+  --border-hover: var(--color-steel-500);
+  --border-analytical: var(--color-cyan-muted);
+  --border-warning: var(--color-amber-muted);
+  --border-critical: var(--color-red-muted);
+
+  --severity-normal: var(--color-concrete-300);
+  --severity-warning: var(--color-amber-400);
+  --severity-critical: var(--color-red-400);
+  --analytical-signal: var(--color-cyan-400);
+
+  --chart-observed: var(--color-cyan-400);
+  --chart-secondary: var(--color-cyan-500);
+  --chart-baseline: var(--color-steel-400);
+  --chart-grid: var(--color-gunmetal-700);
+  --chart-axis: var(--color-gunmetal-600);
+  --chart-cursor: var(--color-steel-500);
+  --chart-hover: rgba(117, 130, 138, 0.09);
+  --chart-law-felony: var(--color-amber-500);
+  --chart-law-misdemeanor: var(--color-cyan-500);
+  --chart-law-violation: var(--color-steel-400);
+
+  --focus-ring: var(--color-cyan-300);
+  --selection-background: var(--color-cyan-muted);
+  --selection-text: var(--color-offwhite-100);
+
+  --font-body: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont,
+    "Segoe UI", sans-serif;
+  --font-heading: "Arial Narrow", "Aptos Narrow", var(--font-body);
+  --font-mono: "SFMono-Regular", Consolas, "Liberation Mono", monospace;
+  --font-size-2xs: 0.6875rem;
+  --font-size-xs: 0.75rem;
+  --font-size-sm: 0.8125rem;
+  --font-size-base: 0.875rem;
+  --font-size-md: 1rem;
+  --font-size-lg: 1.25rem;
+  --font-size-xl: 1.625rem;
+
+  --space-1: 0.25rem;
+  --space-2: 0.5rem;
+  --space-3: 0.75rem;
+  --space-4: 1rem;
+  --space-5: 1.25rem;
+  --space-6: 1.5rem;
+  --space-8: 2rem;
+
+  --radius-sm: 3px;
+  --radius-md: 6px;
+  --radius-lg: 8px;
+  --border-width: 1px;
+  --elevation-panel: 0 4px 12px rgba(0, 0, 0, 0.18);
+  --elevation-header: 0 3px 10px rgba(0, 0, 0, 0.28);
+  --transition-fast: 120ms ease;
+  --content-max: 1600px;
+  --header-height: 68px;
+}
