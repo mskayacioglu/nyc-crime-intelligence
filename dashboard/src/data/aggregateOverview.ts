@@ -451,6 +451,12 @@ export function aggregateSignals(
         ? 'historical expectation'
         : (metadata.dimensions.anomalyExpectedSources[expectedSourceIndex] ??
           'historical expectation')
+    const referenceLabel =
+      expectedSource === 'ml_prediction'
+        ? 'Model estimate'
+        : expectedSource === 'rolling_13_week_mean'
+          ? '13-week average'
+          : 'Historical expectation'
     attention.push({
       id: `anomaly-${index}-${weekIndex}`,
       kind: 'Anomaly',
@@ -471,7 +477,7 @@ export function aggregateSignals(
       ),
       observedLabel: 'Observed',
       observedValue: actualCount,
-      referenceLabel: `Expected · ${expectedSource.replaceAll('_', ' ')}`,
+      referenceLabel,
       referenceValue: expectedCount,
       score,
     })

@@ -56,7 +56,7 @@ function ChartTooltip({
 function EmptyChart({ message }: { message: string }) {
   return (
     <div className="panel-empty">
-      <strong>No observed records</strong>
+      <strong>No data</strong>
       <p>{message}</p>
     </div>
   )
@@ -64,23 +64,17 @@ function EmptyChart({ message }: { message: string }) {
 
 function PanelHeading({
   id,
-  kicker,
   title,
-  description,
   meta,
 }: {
   id: string
-  kicker: string
   title: string
-  description: string
   meta?: string
 }) {
   return (
     <div className="panel-heading">
       <div>
-        <p className="section-kicker">{kicker}</p>
         <h2 id={id}>{title}</h2>
-        <p>{description}</p>
       </div>
       {meta && <span className="panel-meta">{meta}</span>}
     </div>
@@ -92,15 +86,11 @@ function WeeklyTrend({ view }: { view: ObservedView }) {
     <section className="analysis-panel trend-panel" aria-labelledby="trend-title">
       <div className="panel-heading">
         <div>
-          <p className="section-kicker">Observed history</p>
-          <h2 id="trend-title">Weekly crime trend</h2>
-          <p>
-            Reported aggregate events with a prior-only eight-week historical baseline.
-          </p>
+          <h2 id="trend-title">Weekly volume</h2>
         </div>
         <div className="chart-legend" aria-label="Chart legend">
           <span><i className="legend-observed" />Observed</span>
-          <span><i className="legend-baseline" />Historical baseline</span>
+          <span><i className="legend-baseline" />8-week baseline</span>
         </div>
       </div>
       {view.isEmpty ? (
@@ -131,7 +121,7 @@ function WeeklyTrend({ view }: { view: ObservedView }) {
               <Line
                 type="monotone"
                 dataKey="baseline"
-                name="Historical baseline"
+                name="8-week baseline"
                 stroke="var(--chart-baseline)"
                 strokeWidth={1.5}
                 strokeDasharray="5 5"
@@ -154,10 +144,6 @@ function WeeklyTrend({ view }: { view: ObservedView }) {
           </ResponsiveContainer>
         </div>
       )}
-      <p className="panel-footnote">
-        The baseline for each week uses only the eight preceding weeks under the same
-        filters; it never uses later observations.
-      </p>
     </section>
   )
 }
@@ -167,9 +153,7 @@ function BoroughComparison({ values }: { values: RankedValue[] }) {
     <section className="analysis-panel borough-panel" aria-labelledby="borough-title">
       <PanelHeading
         id="borough-title"
-        kicker="Observed distribution"
-        title="Borough comparison"
-        description="Selected-period aggregate complaint events."
+        title="Borough volume"
       />
       {values.length === 0 ? (
         <EmptyChart message="No borough totals match the active filters." />
@@ -205,9 +189,7 @@ function OffenseRanking({ values }: { values: RankedValue[] }) {
     <section className="analysis-panel offense-panel" aria-labelledby="offense-title">
       <PanelHeading
         id="offense-title"
-        kicker="Observed ranking"
-        title="Top offense types"
-        description="Eight highest-volume source offense classifications."
+        title="Top offenses"
       />
       {values.length === 0 ? (
         <EmptyChart message="No offense totals match the active filters." />
@@ -246,9 +228,7 @@ function LawDistribution({ values }: { values: RankedValue[] }) {
     <section className="analysis-panel law-panel" aria-labelledby="law-title">
       <PanelHeading
         id="law-title"
-        kicker="Observed composition"
-        title="Law-category distribution"
-        description="Reported events grouped by source law classification."
+        title="Law categories"
       />
       {values.length === 0 ? (
         <EmptyChart message="No law-category totals match the active filters." />

@@ -4,12 +4,43 @@ import { describe, expect, it, vi } from 'vitest'
 import App from './App'
 import { overviewFixture } from './test/fixture'
 
+vi.mock('./components/MapView', () => ({
+  default: () => (
+    <main id="main-content">
+      <h2>Map and Hotspot View</h2>
+    </main>
+  ),
+}))
+
+describe('Dashboard view navigation', () => {
+  it('opens the Map from Overview and returns without changing the default screen', async () => {
+    const user = userEvent.setup()
+    render(<App loader={async () => overviewFixture()} />)
+
+    expect(await screen.findByTestId('selected-total')).toHaveTextContent('171')
+    expect(
+      screen.getByRole('button', { name: 'Overview' }),
+    ).toHaveAttribute('aria-current', 'page')
+
+    await user.click(screen.getByRole('button', { name: 'Map & hotspots' }))
+    expect(
+      await screen.findByRole('heading', { name: 'Map and Hotspot View' }),
+    ).toBeInTheDocument()
+    expect(
+      screen.getByRole('button', { name: 'Map & hotspots' }),
+    ).toHaveAttribute('aria-current', 'page')
+
+    await user.click(screen.getByRole('button', { name: 'Overview' }))
+    expect(await screen.findByTestId('selected-total')).toHaveTextContent('171')
+  })
+})
+
 describe('Overview application states', () => {
   it('preserves the dashboard frame while aggregate data is loading', () => {
     const loader = () => new Promise<never>(() => undefined)
     render(<App loader={loader} />)
 
-    expect(screen.getByRole('status')).toHaveTextContent('Loading aggregate intelligence')
+    expect(screen.getByRole('status')).toHaveTextContent('Loading overview')
     expect(document.querySelectorAll('.skeleton-metric')).toHaveLength(5)
   })
 
@@ -18,9 +49,9 @@ describe('Overview application states', () => {
     const user = userEvent.setup()
     render(<App loader={loader} />)
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Aggregate data could not be opened')
+    expect(await screen.findByRole('alert')).toHaveTextContent('Data unavailable')
     expect(screen.queryByText(/secret stack detail/i)).not.toBeInTheDocument()
-    await user.click(screen.getByRole('button', { name: 'Retry data load' }))
+    await user.click(screen.getByRole('button', { name: 'Retry' }))
     await waitFor(() => expect(loader).toHaveBeenCalledTimes(2))
   })
 
@@ -34,7 +65,7 @@ describe('Overview application states', () => {
     expect(screen.getByTestId('hotspot-summary')).toHaveClass('metric-card--neutral')
     expect(screen.getByTestId('anomaly-summary')).toHaveClass('metric-card--neutral')
     expect(screen.getByTestId('forecast-summary')).toHaveClass('metric-card--neutral')
-    expect(screen.getByText('No compatible attention signals')).toBeInTheDocument()
+    expect(screen.getByText('No priority signals')).toBeInTheDocument()
   })
 })
 
@@ -110,9 +141,13 @@ describe('Overview global filtering', () => {
 
     const disclosure = screen.getByRole('button', { name: 'Show filters' })
     const controls = document.getElementById('filter-controls')
+    const activeScope = document.querySelector('.filter-active-scope')
     expect(disclosure).toHaveAttribute('aria-expanded', 'false')
     expect(disclosure).toHaveAttribute('aria-controls', 'filter-controls')
     expect(controls).toHaveAttribute('data-expanded', 'false')
+    expect(activeScope).toHaveTextContent(
+      'Active scope · All boroughs · All precincts · All offenses · All law categories',
+    )
 
     await user.click(disclosure)
     expect(screen.getByRole('button', { name: 'Hide filters' })).toHaveAttribute(
@@ -128,14 +163,15 @@ describe('Overview global filtering', () => {
     await screen.findByTestId('selected-total')
 
     await user.selectOptions(screen.getByLabelText('Offense type'), '2')
-    expect(screen.getByText('No aggregate records match these filters')).toBeInTheDocument()
+    expect(screen.getByText('No results')).toBeInTheDocument()
     expect(screen.getByTestId('selected-total')).toHaveTextContent('0')
     expect(screen.getByLabelText('Offense type')).toHaveValue('2')
   })
 })
 
-describe('Overview analytical provenance', () => {
-  it('lists artifact status, phase or version, and generation time when supplied', async () => {
+describe('Overview data context', () => {
+  it('keeps product context concise and excludes development metadata', async () => {
+    const user = userEvent.setup()
     const bundle = overviewFixture()
     bundle.metadata.versions = {
       ...bundle.metadata.versions,
@@ -171,15 +207,22 @@ describe('Overview analytical provenance', () => {
     render(<App loader={async () => bundle} />)
     await screen.findByTestId('selected-total')
 
-    const provenance = screen.getByRole('region', { name: 'Artifact provenance' })
-    expect(within(provenance).getByText('Anomaly metrics')).toBeInTheDocument()
-    expect(within(provenance).getByText('Hotspot metrics')).toBeInTheDocument()
-    expect(within(provenance).getByText('ML forecast metrics')).toBeInTheDocument()
-    expect(within(provenance).getByText('ML forecast manifest')).toBeInTheDocument()
-    expect(within(provenance).getByText('Baseline forecast manifest')).toBeInTheDocument()
-    expect(within(provenance).getByText(/Model fixture_forecast · model v1/)).toBeInTheDocument()
-    expect(within(provenance).getByText(/Phase 4 - Baseline Forecast Model · artifact v2/)).toBeInTheDocument()
-    expect(within(provenance).getByText('2025-03-10 08:30:00Z')).toBeInTheDocument()
-    expect(within(provenance).getAllByText('Available')).toHaveLength(5)
+    const systemContext = screen.getByTestId('system-context')
+    expect(systemContext).not.toHaveAttribute('open')
+    expect(screen.getAllByText(/area-level patterns only/i)).toHaveLength(1)
+    expect(screen.getByRole('button', { name: 'Reload dashboard data' })).toBeInTheDocument()
+
+    await user.click(within(systemContext).getByText('About the data', { selector: 'strong' }))
+    expect(systemContext).toHaveAttribute('open')
+
+    expect(within(systemContext).getByText('Coverage')).toBeInTheDocument()
+    expect(within(systemContext).getByText('Included records')).toBeInTheDocument()
+    expect(within(systemContext).getByText('Point estimate')).toBeInTheDocument()
+    expect(
+      within(systemContext).getByRole('heading', { name: 'How to read these results' }),
+    ).toBeInTheDocument()
+    expect(systemContext).not.toHaveTextContent(
+      /phase \d|contract v|artifact|manifest|\.json|\.parquet|sources ready|generated/i,
+    )
   })
 })

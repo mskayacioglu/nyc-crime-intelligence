@@ -74,15 +74,28 @@ export function FilterToolbar({
 
   const dimensionOptions = (values: string[]) =>
     values.map((label, index) => ({ index, label }))
+  const activeScope = [
+    filters.boroughIndex === null
+      ? 'All boroughs'
+      : displayDimension(dimensions.boroughs[filters.boroughIndex]),
+    filters.precinctIndex === null
+      ? 'All precincts'
+      : `Precinct ${displayDimension(dimensions.precincts[filters.precinctIndex])}`,
+    filters.offenseIndex === null
+      ? 'All offenses'
+      : displayDimension(dimensions.offenseTypes[filters.offenseIndex]),
+    filters.lawIndex === null
+      ? 'All law categories'
+      : displayDimension(dimensions.lawCategories[filters.lawIndex]),
+  ]
 
   return (
     <section className="filter-toolbar" aria-labelledby="filter-heading">
       <div className="filter-toolbar__heading">
         <div>
-          <p className="section-kicker">Operational controls</p>
           <h2 id="filter-heading">
             <ListFilter aria-hidden="true" size={16} />
-            Global filters
+            Filters
           </h2>
         </div>
         <div className="filter-toolbar__actions">
@@ -198,10 +211,14 @@ export function FilterToolbar({
           onChange={(lawIndex) => onChange({ ...filters, lawIndex })}
         />
       </div>
-      <p className="filter-semantics">
-        Dates include Monday-based weekly buckets. Location and category controls
-        apply to every observed view and compatible analytical signal.
-      </p>
+      <div className="filter-toolbar__meta">
+        <p className="filter-semantics">
+          Weeks begin Monday.
+        </p>
+        <p className="filter-active-scope" aria-live="polite">
+          <strong>Active scope</strong> · {activeScope.join(' · ')}
+        </p>
+      </div>
     </section>
   )
 }

@@ -25,8 +25,8 @@ export function LoadingState() {
       <div className="state-banner" role="status">
         <Database aria-hidden="true" size={18} />
         <div>
-          <strong>Loading aggregate intelligence</strong>
-          <span>Opening the compact weekly Overview dataset.</span>
+          <strong>Loading overview</strong>
+          <span>Preparing the current view.</span>
         </div>
       </div>
       <StateSkeleton />
@@ -40,15 +40,11 @@ export function ErrorState({ retry }: { retry: () => void }) {
       <section className="error-panel" role="alert">
         <AlertCircle aria-hidden="true" size={28} />
         <div>
-          <p className="section-kicker">Overview unavailable</p>
-          <h2>Aggregate data could not be opened</h2>
-          <p>
-            Confirm that the dashboard data build has completed, then try loading
-            the Overview again.
-          </p>
+          <h2>Data unavailable</h2>
+          <p>Try loading the dashboard again.</p>
           <button type="button" onClick={retry}>
             <RefreshCw aria-hidden="true" size={15} />
-            Retry data load
+            Retry
           </button>
         </div>
       </section>

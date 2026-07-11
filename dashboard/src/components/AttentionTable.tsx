@@ -7,11 +7,7 @@ export function AttentionTable({ rows }: { rows: AttentionRow[] }) {
     <section className="analysis-panel attention-panel" aria-labelledby="attention-title">
       <div className="panel-heading">
         <div>
-          <p className="section-kicker">Aggregate signals</p>
-          <h2 id="attention-title">Attention queue</h2>
-          <p>
-            Highest-severity aggregate anomalies and current hotspot signals.
-          </p>
+          <h2 id="attention-title">Priority signals</h2>
         </div>
         <Crosshair aria-hidden="true" size={18} />
       </div>
@@ -19,10 +15,8 @@ export function AttentionTable({ rows }: { rows: AttentionRow[] }) {
         <div className="panel-empty panel-empty--compact">
           <AlertTriangle aria-hidden="true" size={18} />
           <div>
-            <strong>No compatible attention signals</strong>
-            <p>
-              No high or critical hotspot or anomaly rows match this filter context.
-            </p>
+            <strong>No priority signals</strong>
+            <p>Adjust the filters to review another scope.</p>
           </div>
         </div>
       ) : (
@@ -71,8 +65,7 @@ export function AttentionTable({ rows }: { rows: AttentionRow[] }) {
         </div>
       )}
       <p className="panel-footnote">
-        Signals identify aggregate conditions for review. They do not establish
-        causality or justify person-level or enforcement action.
+        Scores rank signal strength; they are not event counts.
       </p>
     </section>
   )
