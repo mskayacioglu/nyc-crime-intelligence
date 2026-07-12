@@ -1,4 +1,4 @@
-import { render, screen, waitFor, within } from '@testing-library/react'
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react'
 import userEvent from '@testing-library/user-event'
 import { useState } from 'react'
 import { describe, expect, it, vi } from 'vitest'
@@ -8,6 +8,10 @@ import type { OverviewFilters } from '../types/overview'
 import { mapFixture } from '../test/mapFixture'
 import { overviewFixture } from '../test/fixture'
 import MapView from './MapView'
+import forecastArtifact from '../../public/data/forecast-map.json'
+import overviewMetadataArtifact from '../../public/data/overview.json'
+import { decodeForecastMap } from '../data/loadForecastMap'
+import type { OverviewMetadata } from '../types/overview'
 
 vi.mock('./HotspotMap', () => ({
   HotspotMap: ({
@@ -245,5 +249,46 @@ describe('Map filtering and selection', () => {
     expect(
       screen.getByRole('complementary', { name: 'Grid 40.845, -73.905' }),
     ).toBeInTheDocument()
+  })
+})
+
+describe('Predictive Map modes', () => {
+  function PredictiveHarness() {
+    const metadata=overviewMetadataArtifact as unknown as OverviewMetadata
+    const defaults=defaultFilters(metadata)
+    const [filters,setFilters]=useState(defaults)
+    return <MapView metadata={metadata} filters={filters} onFilters={setFilters} onReset={()=>setFilters(defaults)} mapLoader={async()=>mapFixture()} forecastMapLoader={async()=>decodeForecastMap(structuredClone(forecastArtifact))}/>
+  }
+
+  it('switches to the complete keyboard-accessible Forecast list/detail with neutral geography', async () => {
+    const user=userEvent.setup()
+    render(<PredictiveHarness/>)
+    await user.click(screen.getByRole('button',{name:'Forecast'}))
+    expect(await screen.findByRole('heading',{name:'Spatial reference unavailable'})).toBeInTheDocument()
+    expect(screen.getByRole('heading',{name:'Precinct forecast list'})).toBeInTheDocument()
+    const buttons=screen.getAllByRole('button',{name:/select precinct/i})
+    expect(buttons).toHaveLength(78)
+    buttons[1].focus(); await user.keyboard('{Enter}')
+    expect(buttons[1]).toHaveAttribute('aria-pressed','true')
+    expect(screen.getByRole('complementary')).toHaveTextContent(/Expected aggregate reported-event volume/i)
+    expect(screen.getByRole('complementary')).toHaveTextContent(/No prediction interval is available/i)
+  })
+
+  it('shows signed direction text in Expected change mode and preserves Hotspots', async () => {
+    const user=userEvent.setup()
+    render(<PredictiveHarness/>)
+    await user.click(screen.getByRole('button',{name:'Expected change'}))
+    expect(await screen.findByRole('heading',{name:'Expected change'})).toBeInTheDocument()
+    expect(screen.getAllByText(/above|below|approximately equal/i).length).toBeGreaterThan(0)
+    await user.click(screen.getByRole('button',{name:'Hotspots'}))
+    expect(screen.getByRole('button',{name:'Hotspots'})).toHaveAttribute('aria-pressed','true')
+  })
+
+  it('does not reuse the fixed forecast for an unsupported historical range', async () => {
+    const user=userEvent.setup()
+    render(<PredictiveHarness/>)
+    fireEvent.input(screen.getByLabelText('End week'),{target:{value:'2025-12-15'}})
+    await user.click(screen.getByRole('button',{name:'Forecast'}))
+    expect(await screen.findByRole('heading',{name:'Forecast unavailable for this historical selection'})).toBeInTheDocument()
   })
 })

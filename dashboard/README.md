@@ -1,15 +1,14 @@
 # NYC Crime Intelligence Dashboard
 
-Phases 7A and 7B provide two aggregate-only operational views, and Phase 7C.1
-stages the validated data contract for a later Forecast Map layer:
+Phases 7A, 7B, and 7C provide aggregate-only Overview, Hotspot, and Predictive
+Map experiences:
 
 - **Overview** remains the first screen and reads compact metadata plus the
   gzip-compressed weekly aggregate cube.
 - **Map & hotspots** reads a separate compact hotspot snapshot and adds both a
   visual map and a keyboard-accessible aggregate hotspot list/detail view.
-- **Forecast Map contract** is generated now as a browser-safe aggregate
-  artifact, but Phase 7C.1 deliberately adds no loader, UI, map layer, API, or
-  runtime inference.
+- **Predictive Map** strictly loads the browser-safe contract and adds Forecast
+  and Expected change modes to the existing Map workspace.
 
 The browser never receives complaint-level records, complaint identifiers,
 victim or suspect demographics, person-level scores, or recommendations about
@@ -22,7 +21,29 @@ The Vite, React, and TypeScript project loads or stages these frontend-safe outp
 - `public/data/overview.json`
 - `public/data/overview-cube.bin.gz`
 - `public/data/map.json`
-- `public/data/forecast-map.json` (staged contract; not loaded by the app yet)
+- `public/data/forecast-map.json` (runtime-validated with `cache: 'no-cache'`)
+
+The Forecast loader validates unknown JSON without coercion: exact identity and
+schema, deterministic dates and one-week horizon, dimensions/indexes, stable
+unique rows, location keys, borough assignments, arithmetic, summaries,
+model/error alignment, baseline nullability, and privacy/ethics flags. Network
+or malformed JSON errors are separate from contract-declared missing, invalid,
+stale, and available-empty states; a valid zero is retained as data.
+
+The Map workspace offers **Hotspots**, **Forecast**, and **Expected change**.
+Predictive rows are aggregated to one row per precinct after applying borough,
+precinct, offense, and law filters. Baselines are summed only when every
+contributing row has history; partial coverage is disclosed and aggregate
+change is withheld. Historical Overview ranges that exclude the latest
+complete source week show a neutral unsupported-date state. Older/newer safe
+dates or observation horizons show explicit mismatch states.
+
+No complete verified precinct spatial reference exists, so predictive modes do
+not reuse partial hotspot centroids. Their geographic canvas says spatial
+reference unavailable, while all filtered precincts remain operable through a
+keyboard-accessible synchronized list/detail path. Enabling polygons or markers
+later requires a reproducibly vendored, aggregate-safe, license-compatible
+artifact covering every `nypd-precinct:<label>` key.
 
 The Phase 7A Overview contract and deterministic cube are unchanged. Phase 7B
 uses a separate deterministic `map.json` contract so fixed-snapshot hotspot
@@ -149,8 +170,10 @@ npm install
 npm run dev
 ```
 
-Open the URL printed by Vite. Overview is the default application
-view; use the **Map & hotspots** navigation control to open the map workspace.
+Open the URL printed by Vite. Overview is the default application view; use
+**Map & hotspots**, then choose **Forecast** or **Expected change** above the
+workspace. Use the shared filters and select any precinct in the list for its
+detail and model context.
 The verified development server for this redesign is
 <http://127.0.0.1:4173/>.
 
