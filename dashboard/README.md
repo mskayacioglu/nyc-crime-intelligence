@@ -1,11 +1,15 @@
 # NYC Crime Intelligence Dashboard
 
-Phases 7A and 7B provide two aggregate-only operational views:
+Phases 7A and 7B provide two aggregate-only operational views, and Phase 7C.1
+stages the validated data contract for a later Forecast Map layer:
 
 - **Overview** remains the first screen and reads compact metadata plus the
   gzip-compressed weekly aggregate cube.
 - **Map & hotspots** reads a separate compact hotspot snapshot and adds both a
   visual map and a keyboard-accessible aggregate hotspot list/detail view.
+- **Forecast Map contract** is generated now as a browser-safe aggregate
+  artifact, but Phase 7C.1 deliberately adds no loader, UI, map layer, API, or
+  runtime inference.
 
 The browser never receives complaint-level records, complaint identifiers,
 victim or suspect demographics, person-level scores, or recommendations about
@@ -13,11 +17,12 @@ patrol or enforcement.
 
 ## Architecture
 
-The Vite, React, and TypeScript application loads these frontend-safe outputs:
+The Vite, React, and TypeScript project loads or stages these frontend-safe outputs:
 
 - `public/data/overview.json`
 - `public/data/overview-cube.bin.gz`
 - `public/data/map.json`
+- `public/data/forecast-map.json` (staged contract; not loaded by the app yet)
 
 The Phase 7A Overview contract and deterministic cube are unchanged. Phase 7B
 uses a separate deterministic `map.json` contract so fixed-snapshot hotspot
@@ -78,12 +83,38 @@ is retained.
 ## Refresh dashboard data
 
 From the repository root, use the project Python environment. Refresh Overview
-first so its shared date/filter context is current, then refresh Map:
+first so its shared date/filter context is current, then refresh Map and the
+staged Forecast Map contract:
 
 ```bash
 .venv/bin/python src/analytics/build_dashboard_overview.py
 .venv/bin/python src/analytics/build_dashboard_map.py
+.venv/bin/python src/analytics/build_dashboard_forecast_map.py
 ```
+
+The Forecast Map build writes byte-identical copies:
+
+- `data/processed/dashboard_forecast_map.json` — canonical processed contract
+- `dashboard/public/data/forecast-map.json` — staged frontend-safe copy
+
+Pass `--skip-dashboard-copy` when only the canonical Forecast Map artifact
+should be updated. The build consumes the validated weekly aggregate, Overview
+date/filter context, ML predictions/metrics/manifest, and the selected baseline
+predictions/manifest. It never modifies those source artifacts.
+
+Forecast availability is explicit: `available`, `missing`, `invalid`, or
+`stale`; an `available` artifact can also be genuinely empty. Missing, invalid,
+or stale input is never represented as a valid zero forecast. The contract
+publishes one next-week point-estimate horizon only. Its selected prior-only
+trailing-eight-week baseline and expected-change fields are nullable where
+history is insufficient, and change percentage remains null when the baseline
+is zero. No prediction interval exists.
+
+There is no complete verified precinct geometry or centroid reference in the
+repository. The contract therefore publishes only an opaque
+`nypd-precinct:<label>` join key for canonically mapped known precincts. It does
+not derive or expose event coordinates, partial hotspot centroids, or inferred
+precinct boundaries.
 
 The Map build writes:
 
@@ -128,6 +159,7 @@ The verified development server for this redesign is
 From the repository root:
 
 ```bash
+.venv/bin/python -m unittest tests.test_dashboard_forecast_map_contract
 .venv/bin/python -m unittest tests/test_dashboard_map_contract.py
 .venv/bin/python -m unittest discover -s tests -p 'test_*_contract.py'
 ```
@@ -240,6 +272,13 @@ newer one is treated as incompatible. Neither mismatch is rendered as current.
 - Forecasts remain future model estimates shown only with aligned historical
   error context. Overall backtest errors are not recomputed for active filters,
   and the current model does not provide prediction intervals.
+- The staged Forecast Map contract describes expected aggregate reported-event
+  volume for the single week after its fixed source horizon. It does not predict
+  individual behavior, identify a specific future incident location, score
+  neighborhood danger, or recommend patrol or enforcement action.
+- Source rows with unknown geography or borough/precinct combinations that do
+  not match the established aggregate-derived canonical mapping are withheld
+  and quantified; they are never silently remapped or combined.
 - Precinct points are aggregate centroids, not precinct boundaries or exact
   event locations.
 - Grid points represent 0.01-degree cells; degree grids are not equal-area.
@@ -252,6 +291,9 @@ newer one is treated as incompatible. Neither mismatch is rendered as current.
 - Phase 7B does not add anomaly mapping, forecasts, uncertainty intervals,
   precinct boundaries, a standalone API, authentication, deployment, or live
   ingestion.
+- Phase 7C.1 does not add Forecast UI, a frontend loader, a forecast map layer,
+  grid forecasts, a new model, an API, deployment, authentication, or real-time
+  inference. Those product integration steps begin with Phase 7C.2.
 - CARTO/OpenStreetMap raster tiles provide geographic context, but aggregate
   markers/shapes and the adjacent list/detail remain usable independently of a
   tile-loading failure.

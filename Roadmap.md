@@ -259,6 +259,101 @@ Amaç: Model ve analitik çıktılarını operasyonel olarak anlaşılır bir ü
 - Güven aralığı
 - En yüksek artış beklenen bölgeler
 
+### Phase 7C — Predictive Map
+
+Durum: Phase 7C.1 — Forecast Map Data Contract tamamlandı. Phase 7C.2 —
+Forecast Map UI/katmanı planlandı; Phase 7C bütünü henüz tamamlanmadı.
+
+Amaç: Mevcut haftalık tahminleri coğrafi bağlama taşıyarak kullanıcıya yalnızca
+geçmiş yoğunlaşmaları değil, gelecek hafta için beklenen toplu olay hacmini ve
+tarihsel beklentiden farkını da göstermek.
+
+İlk teslim kapsamı:
+
+- İlk tahmin ufku bir sonraki hafta olacaktır.
+- İlk coğrafi seviye precinct olacaktır; mevcut model çıktısı borough, precinct,
+  suç tipi ve law category anahtarlarını taşımaktadır.
+- Map ekranında **Hotspots**, **Forecast** ve **Expected change** katmanları
+  arasında geçiş yapılabilecektir.
+- Global tarih, borough, precinct, suç tipi ve law category filtreleri tahmin
+  katmanıyla aynı anlamı koruyacaktır.
+- Seçili precinct detayında tahmin edilen olay sayısı, tarihsel beklenti, sayı ve
+  yüzde farkı, tahmin haftası ve uygun model hata bağlamı gösterilecektir.
+- Harita kişi veya olay noktası değil, yalnızca aggregate precinct sinyali
+  gösterecektir.
+
+Frontend-safe çıktı:
+
+```text
+data/processed/dashboard_forecast_map.json
+dashboard/public/data/forecast-map.json
+```
+
+Önerilen tahmin satırı:
+
+```text
+forecast_week
+| borough
+| precinct
+| offense_type
+| law_category
+| predicted_count
+| historical_baseline
+| expected_change_count
+| expected_change_pct
+| precinct_location_key
+```
+
+Sözleşme ayrıca veri bitiş tarihi, tahmin üretim tarihi, desteklenen tahmin
+haftaları, backtest hata bağlamı, filtre boyutları ve aggregate-only güvenlik
+bayraklarını taşımalıdır. Tarayıcıya olay kaydı, kesin adres, şikâyet kimliği,
+kişi bilgisi veya demografik alan gönderilmemelidir.
+
+Doğrulama ve durum davranışı:
+
+- Tahmin haftası son gözlem haftasından kesin olarak ileri olmalıdır.
+- Aynı hafta/precinct/suç/law anahtarı tekrar edemez.
+- Tahmin, baseline, fark ve hata değerleri sonlu ve savunulabilir olmalıdır.
+- Forecast, model manifesti ve Overview veri tarihi birbiriyle uyumlu olmalıdır.
+- Missing, invalid, stale, empty ve Overview/Forecast mismatch durumları ayrı
+  tutulmalı; uyumsuz tahmin güncelmiş gibi gösterilmemelidir.
+- Tarihsel filtre seçimi mevcut gelecek tahminini geçmişe aitmiş gibi
+  göstermemeli; desteklenmeyen kapsam nötr bir durum üretmelidir.
+- Mevcut model tahmin aralığı üretmediği sürece arayüz yalnızca point estimate ve
+  doğrulanmış backtest hata bağlamını göstermeli, güven aralığı üretmemelidir.
+
+Erişilebilirlik ve ürün dili:
+
+- Tahmin farkı yalnızca renkle anlatılmamalıdır; yön, değer ve metin etiketi
+  birlikte kullanılmalıdır.
+- Tüm tahmin bölgeleri klavye erişilebilir bir listede bulunmalı ve harita
+  seçimiyle senkron kalmalıdır.
+- Dil, “gelecekte burada suç olacak” veya “riskli bölge” dememeli; “tarihsel
+  seviyenin üzerinde/altında toplu olay hacmi bekleniyor” biçiminde olmalıdır.
+- Model çıktısı otomatik devriye, yaptırım veya kişi düzeyi karar önerisi olarak
+  sunulmamalıdır.
+
+İlk sürüm dışı:
+
+- Grid seviyesinde tahmin
+- Aylık veya çoklu-horizon tahmin haritası
+- Gerçek zamanlı inference
+- Olay veya kişi seviyesinde tahmin
+- Otomatik enforcement/patrol önerisi
+- API veya deployment çalışması
+
+Başarı kriteri:
+
+- Kullanıcı aynı Map ekranında geçmiş hotspot ile gelecek hafta tahminini açıkça
+  ayırabiliyor olmalıdır.
+- Precinct tahminleri mevcut global filtrelerle deterministik olarak eşleşmelidir.
+- Tahmin, baseline ve expected change değerleri aynı frontend-safe sözleşmeden
+  gelmelidir.
+- Loader; duplicate, future-horizon, malformed, stale ve tarih uyumsuzluğu
+  kontrollerini testlerle uygulamalıdır.
+- Forecast katmanı masaüstü, tablet, mobil ve klavye kullanımında hotspot
+  davranışını bozmamalıdır.
+
 ### Anomalies
 
 - Normalden yüksek artışlar
