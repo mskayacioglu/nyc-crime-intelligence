@@ -22,6 +22,8 @@ The Vite, React, and TypeScript project loads or stages these frontend-safe outp
 - `public/data/overview-cube.bin.gz`
 - `public/data/map.json`
 - `public/data/forecast-map.json` (runtime-validated with `cache: 'no-cache'`)
+- `public/data/precinct-spatial-reference.json` (runtime-validated with
+  `cache: 'no-cache'`)
 
 The Forecast loader validates unknown JSON without coercion: exact identity and
 schema, deterministic dates and one-week horizon, dimensions/indexes, stable
@@ -29,6 +31,21 @@ unique rows, location keys, borough assignments, arithmetic, summaries,
 model/error alignment, baseline nullability, and privacy/ethics flags. Network
 or malformed JSON errors are separate from contract-declared missing, invalid,
 stale, and available-empty states; a valid zero is retained as data.
+
+The independent precinct-spatial loader applies the same strict boundary to
+the official 78-feature geometry contract. It validates exact application and
+schema identity, official provenance and checksums, CRS and coordinate order,
+finite eight-decimal NYC-plausible coordinates, MultiPolygon nesting, closed
+nondegenerate nonzero-area rings, declared counts and bounds, lexical key ordering, complete
+Forecast key reconciliation, and aggregate-safe privacy/responsible-use flags.
+Missing, malformed, incomplete, duplicate, mismatched, or incompatible spatial
+data receives a distinct neutral state; unavailable geography is never decoded
+as an empty result.
+
+Because the official dataset is quarterly, the runtime treats the artifact as
+stale 120 calendar days after its recorded portal update unless a reviewed newer
+edition is vendored. Stale geography is withheld while Forecast list/detail
+values remain available.
 
 The Map workspace offers **Hotspots**, **Forecast**, and **Expected change**.
 Predictive rows are aggregated to one row per precinct after applying borough,
@@ -38,12 +55,21 @@ change is withheld. Historical Overview ranges that exclude the latest
 complete source week show a neutral unsupported-date state. Older/newer safe
 dates or observation horizons show explicit mismatch states.
 
-No complete verified precinct spatial reference exists, so predictive modes do
-not reuse partial hotspot centroids. Their geographic canvas says spatial
-reference unavailable, while all filtered precincts remain operable through a
-keyboard-accessible synchronized list/detail path. Enabling polygons or markers
-later requires a reproducibly vendored, aggregate-safe, license-compatible
-artifact covering every `nypd-precinct:<label>` key.
+Forecast and Expected change render official administrative MultiPolygon
+boundaries from NYC Department of City Planning / NYC Open Data's May 2026 26B
+**Police Precincts** dataset (`y76i-bdw7`). The spatial contract covers every
+one of the 78 `nypd-precinct:<label>` Forecast keys exactly once and does not
+reuse complaint-derived hotspot centroids. Polygon, list, and detail selection
+share one state; the complete keyboard-accessible list/detail path remains
+usable without touching the map and while raster tiles fail.
+
+Forecast uses a sequential aggregate-volume scale with an explicit zero class
+and four positive steps capped at the filtered 95th percentile. Expected change
+uses a symmetric diverging domain based on the filtered 95th percentile of
+absolute changes and the established `0.000001` approximately-equal tolerance.
+Direction and exact values remain textually available. Missing or partial
+baseline is never treated as zero: change is withheld and polygons use lower
+fill opacity plus distinct dashed-outline semantics described in the legend.
 
 The Phase 7A Overview contract and deterministic cube are unchanged. Phase 7B
 uses a separate deterministic `map.json` contract so fixed-snapshot hotspot
@@ -111,6 +137,7 @@ staged Forecast Map contract:
 .venv/bin/python src/analytics/build_dashboard_overview.py
 .venv/bin/python src/analytics/build_dashboard_map.py
 .venv/bin/python src/analytics/build_dashboard_forecast_map.py
+.venv/bin/python src/analytics/build_dashboard_precinct_spatial_reference.py
 ```
 
 The Forecast Map build writes byte-identical copies:
@@ -131,11 +158,33 @@ trailing-eight-week baseline and expected-change fields are nullable where
 history is insufficient, and change percentage remains null when the baseline
 is zero. No prediction interval exists.
 
-There is no complete verified precinct geometry or centroid reference in the
-repository. The contract therefore publishes only an opaque
-`nypd-precinct:<label>` join key for canonically mapped known precincts. It does
-not derive or expose event coordinates, partial hotspot centroids, or inferred
-precinct boundaries.
+The spatial build consumes the unmodified official source and reviewed
+provenance record in `data/source/nyc_open_data/`, then reconciles it against the
+real Forecast Map artifact. It writes byte-identical canonical and browser
+copies:
+
+- `data/processed/dashboard_precinct_spatial_reference.json`
+- `dashboard/public/data/precinct-spatial-reference.json`
+
+The vendored source is NYC Open Data dataset `y76i-bdw7`, DCP edition 26B,
+retrieved 2026-07-12 from the official bulk GeoJSON endpoint. Its SHA-256 is
+`5210830afa9d0875b7a7c769edfc4d2ebe984a9ab1e36f3b7fad8508828172aa`.
+The portal does not attach a named license; the reviewed public-use assessment
+instead records NYC Open Data's no-use-restrictions statement and DCP's freely
+available/no-fee metadata together with the City's informational/no-warranty
+terms. See the adjacent provenance JSON and source README for exact URLs,
+retrieval metadata, schema, CRS, checksum, and reproduction command.
+
+The official GeoJSON export is already OGC:CRS84 longitude/latitude; repository
+processing performs no reprojection and no simplification. Coordinates are
+serialized to eight decimal places without removing vertices. Six- and
+seven-decimal trials each collapsed a small authoritative ring, so eight is the
+minimum verified precision that preserves every ring's closure and three
+distinct non-closing vertices. Feature order, generation time, JSON encoding,
+and copies are deterministic. Pass `--skip-dashboard-copy` when only the
+canonical spatial artifact should be written. The current edition's runtime
+refresh deadline is 2026-09-23T19:46:58Z, derived deterministically from the
+recorded portal update plus the documented 120-day quarterly-source window.
 
 The Map build writes:
 
@@ -172,8 +221,10 @@ npm run dev
 
 Open the URL printed by Vite. Overview is the default application view; use
 **Map & hotspots**, then choose **Forecast** or **Expected change** above the
-workspace. Use the shared filters and select any precinct in the list for its
-detail and model context.
+workspace. The verified polygons load on first entry into a predictive mode.
+Use the shared filters and select a precinct through either its polygon or the
+keyboard-operable list; both update the same detail and model context. The list
+remains the complete non-map path.
 The verified development server for this redesign is
 <http://127.0.0.1:4173/>.
 
@@ -183,6 +234,7 @@ From the repository root:
 
 ```bash
 .venv/bin/python -m unittest tests.test_dashboard_forecast_map_contract
+.venv/bin/python -m unittest tests.test_dashboard_precinct_spatial_reference_contract
 .venv/bin/python -m unittest tests/test_dashboard_map_contract.py
 .venv/bin/python -m unittest discover -s tests -p 'test_*_contract.py'
 ```
@@ -197,11 +249,12 @@ npm audit --omit=dev
 npm run dev
 ```
 
-Keep the final development server running for manual browser verification at
-desktop, tablet, and mobile widths. Exercise every filter, reset, hotspot
-selection, keyboard list navigation, the historical-snapshot explanation, and
-the missing/empty/error states; also check overflow, focus visibility, reduced
-motion, map asset loading, and the browser console.
+Start the development server only for manual browser verification and stop it
+when finished. Check desktop, tablet, and mobile widths. Exercise every filter,
+reset, hotspot selection, keyboard list navigation, the historical-snapshot explanation, and
+the missing/empty/error states; also check polygon/list/detail synchronization,
+zero and partial-baseline presentation, overflow, focus visibility, reduced
+motion, tile-failure resilience, map asset loading, and the browser console.
 
 ### Redesign verification
 
@@ -244,6 +297,34 @@ The final product-copy pass was rechecked at 1280 × 720: four chart SVGs and al
 15 visible Map tiles rendered, the vector canvas remained present, both concise
 data disclosures opened correctly, horizontal overflow stayed at zero, and no
 development metadata or browser warning/error remained.
+
+### Phase 7C.3 verification
+
+The final automated Phase 7C.3 pass builds all 78 real official MultiPolygon
+features and 98,060 positions; passes the 19 Forecast Map and nine spatial
+focused Python tests, all 87 Python contract tests, ESLint, all 92 Vitest tests,
+the 2,359-module production build, the zero-vulnerability production audit, and
+`git diff --check`. The canonical and public spatial JSON files are
+byte-identical at 2,643,692 bytes with SHA-256
+`ee23fc904a94c30515df0073ce8b1b3a5d6446292758928d057bcaa88c91edeb`.
+
+The final build reports 229.04 / 64.78 kB for lazy Map JavaScript, 226.25 /
+71.36 kB for main JavaScript, 404.27 / 113.51 kB for Overview JavaScript,
+15.09 / 6.36 kB for Map CSS, and 48.66 / 9.21 kB for main CSS (raw/gzip).
+Compared with Phase 7C.2, lazy Map JavaScript adds 40.57 / 10.32 kB while main
+and Overview remain effectively unchanged.
+
+Practical browser checks passed for the real Overview and 396-row Hotspots
+regressions, Forecast and Expected change with all 78 precincts, categorical
+filters, Reset, valid zero, partial baseline, the historical state, visible
+focus, 20 loaded tiles, desktop/tablet overflow, and 44-pixel controls. The
+browser security layer blocked further localhost interaction during the
+390 × 844 switch. Mobile/state/tile-failure/reduced-motion/console behavior is
+covered by automated tests but still needs a successful practical rerun before
+the Phase 7C.3 verification gate can be called complete. The temporary server
+was stopped. The later small-positive formatting, spatial-stale, and zero-area
+ring hardening passes automated coverage but was not re-opened in that blocked
+browser session.
 
 ## Map contract and filter semantics
 
@@ -302,8 +383,9 @@ newer one is treated as incompatible. Neither mismatch is rendered as current.
 - Source rows with unknown geography or borough/precinct combinations that do
   not match the established aggregate-derived canonical mapping are withheld
   and quantified; they are never silently remapped or combined.
-- Precinct points are aggregate centroids, not precinct boundaries or exact
-  event locations.
+- Hotspot precinct points are aggregate centroids, not precinct boundaries or
+  exact event locations. Predictive modes use the separate official precinct
+  boundary contract and never use those centroids.
 - Grid points represent 0.01-degree cells; degree grids are not equal-area.
 - Recent hotspot counts are compared with a 365-day historical rate normalized
   to the same 30-day duration when that reference is available.
@@ -317,6 +399,10 @@ newer one is treated as incompatible. Neither mismatch is rendered as current.
 - Phase 7C.1 does not add Forecast UI, a frontend loader, a forecast map layer,
   grid forecasts, a new model, an API, deployment, authentication, or real-time
   inference. Those product integration steps begin with Phase 7C.2.
+- Phase 7C.3 adds only verified precinct geography and rendering. It does not
+  alter the Forecast model or artifacts, add event/person/address/demographic
+  fields, infer centroids, fabricate geometry, add intervals, or recommend risk,
+  patrol, or enforcement actions.
 - CARTO/OpenStreetMap raster tiles provide geographic context, but aggregate
   markers/shapes and the adjacent list/detail remain usable independently of a
   tile-loading failure.

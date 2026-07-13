@@ -6,6 +6,42 @@ import type { OverviewMetadata } from '../types/overview'
 
 const copy = () => structuredClone(artifact) as unknown
 
+function makeAvailableEmpty(): Record<string, unknown> {
+  const value=copy() as Record<string,unknown>
+  const range=value.dataRange as Record<string,unknown>
+  const dimensions=value.dimensions as Record<string,unknown>
+  const filterIndex=(value.filterIndex as {precinctsByBorough:Record<string,unknown>}).precinctsByBorough
+  const forecast=value.forecast as Record<string,unknown>
+  const summary=forecast.summary as Record<string,unknown>
+  const baseline=value.baseline as Record<string,unknown>
+  const baselineSummary=baseline.summary as Record<string,unknown>
+  const availability=value.availability as Record<string,unknown>
+  range.supportedForecastWeeks=[]
+  for(const key of ['forecastWeeks','boroughs','precincts','offenseTypes','lawCategories']) dimensions[key]=[]
+  filterIndex.rows=[]
+  forecast.rows=[]
+  forecast.isEmpty=true
+  Object.assign(summary,{
+    rowCount:0,sourceRowCount:0,sourceSegmentCount:8466,modelSegmentCoveragePct:0,
+    withheldRowCount:0,sourcePredictedTotal:null,predictedTotal:null,
+    withheldPredictedTotal:null,rowCoveragePct:null,predictedVolumeCoveragePct:null,
+    publishedPrecinctCount:0,publishedBoroughCount:0,unknownOffenseRowCount:0,
+    countsByBorough:[],zeroPredictionRowCount:0,
+    withheldReasonCounts:{boroughMismatch:0,unmappableLocation:0},
+  })
+  Object.assign(baselineSummary,{
+    publishedRowCount:0,baselineAvailableRowCount:0,baselineUnavailableRowCount:0,
+    expectedChangeCountAvailableRowCount:0,expectedChangePctAvailableRowCount:0,
+    zeroBaselineRowCount:0,
+  })
+  baseline.valueAvailability='unavailable'
+  Object.assign(availability,{
+    forecastPointEstimates:'empty',historicalBaseline:'unavailable',
+    expectedChangeCount:'unavailable',expectedChangePct:'unavailable',
+  })
+  return value
+}
+
 describe('Forecast Map runtime contract', () => {
   it('loads the real generated artifact deterministically with one next-week horizon', () => {
     const first=decodeForecastMap(copy()), second=decodeForecastMap(copy())
@@ -42,5 +78,83 @@ describe('Forecast Map runtime contract', () => {
     expect(rows.reduce((sum,row)=>sum+row.predictedCount,0)).toBeCloseTo(contract.forecast.summary.predictedTotal!,6)
     expect(rows.some(row=>row.baselineRows<row.totalRows)).toBe(true)
     expect(contract.forecast.rows.some(row=>row[5]===0)).toBe(true)
+  })
+
+  it('accepts a strictly declared available-empty state without converting it to zero', () => {
+    const contract=decodeForecastMap(makeAvailableEmpty())
+    expect(contract.forecast.status).toBe('available')
+    expect(contract.forecast.isEmpty).toBe(true)
+    expect(contract.forecast.rows).toEqual([])
+    expect(contract.forecast.summary.predictedTotal).toBeNull()
+    expect(contract.availability.forecastPointEstimates).toBe('empty')
+  })
+
+  it('accepts strict missing and stale states with withheld dimensions and totals', () => {
+    const missing=makeAvailableEmpty()
+    const missingForecast=missing.forecast as Record<string,unknown>
+    const missingSummary=missingForecast.summary as Record<string,unknown>
+    const missingBaseline=missing.baseline as Record<string,unknown>
+    const missingAvailability=missing.availability as Record<string,unknown>
+    missingForecast.status='missing'; missingForecast.isEmpty=false
+    missingForecast.reason='Forecast prediction artifact is missing.'
+    Object.assign(missingSummary,{
+      sourceRowCount:null,sourceSegmentCount:null,modelSegmentCoveragePct:null,
+      withheldRowCount:null,
+    })
+    Object.assign(missingBaseline,{
+      status:'invalid',reason:'Baseline values cannot align to a missing forecast.',
+      method:null,semantics:null,requiredPriorWeeks:null,priorOnly:null,zeroFillRule:null,
+    })
+    missingAvailability.forecastPointEstimates='missing'
+    const missingContract=decodeForecastMap(missing)
+    expect(missingContract.forecast.status).toBe('missing')
+
+    const stale=structuredClone(missing) as Record<string,unknown>
+    const staleForecast=stale.forecast as Record<string,unknown>
+    const staleAvailability=stale.availability as Record<string,unknown>
+    staleForecast.status='stale'; staleForecast.reason='Forecast is behind observations.'
+    staleAvailability.forecastPointEstimates='stale'
+    stale.model={
+      status:'stale',sourceFile:'model_manifest.json',reason:'Model is behind observations.',
+      artifactType:null,artifactVersion:null,name:null,version:null,forecastWeek:null,
+      trainingStartWeek:null,trainingThroughWeek:null,leakageControlsVerified:false,
+      pointEstimatesOnly:true,predictionIntervalsAvailable:false,
+      historicalError:{status:'invalid',sourceFile:'ml_metrics.json',reason:'Historical context cannot align.'},
+    }
+    const staleContract=decodeForecastMap(stale)
+    expect(staleContract.forecast.status).toBe('stale')
+    expect(staleContract.forecast.summary.predictedTotal).toBeNull()
+  })
+
+  it('preserves point estimates when optional baseline or historical error context is invalid', () => {
+    const value=copy() as Record<string,unknown>
+    const forecast=value.forecast as {rows:unknown[][]}
+    forecast.rows.forEach(row=>{row[6]=null;row[7]=null;row[8]=null})
+    const baseline=value.baseline as Record<string,unknown>
+    const baselineSummary=baseline.summary as Record<string,unknown>
+    Object.assign(baseline,{
+      status:'invalid',reason:'Fixture baseline is invalid.',method:null,semantics:null,
+      requiredPriorWeeks:null,priorOnly:null,zeroFillRule:null,valueAvailability:'unavailable',
+    })
+    Object.assign(baselineSummary,{
+      baselineAvailableRowCount:0,
+      baselineUnavailableRowCount:forecast.rows.length,
+      expectedChangeCountAvailableRowCount:0,
+      expectedChangePctAvailableRowCount:0,
+      zeroBaselineRowCount:0,
+    })
+    Object.assign(value.availability as Record<string,unknown>,{
+      historicalBaseline:'unavailable',expectedChangeCount:'unavailable',
+      expectedChangePct:'unavailable',
+    })
+    const model=value.model as Record<string,unknown>
+    model.historicalError={
+      status:'invalid',sourceFile:'ml_metrics.json',reason:'Fixture metrics are invalid.',
+    }
+    const contract=decodeForecastMap(value)
+    expect(contract.forecast.status).toBe('available')
+    expect(contract.forecast.rows.length).toBeGreaterThan(0)
+    expect(contract.baseline.status).toBe('invalid')
+    expect(contract.model.historicalError.status).toBe('invalid')
   })
 })

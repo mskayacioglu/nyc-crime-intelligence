@@ -5,7 +5,15 @@ export const FORECAST_MAP_ROW_COLUMNS = [
 ] as const
 
 export type ForecastMapStatus = 'available' | 'missing' | 'invalid' | 'stale'
-export type Availability = 'available' | 'partial' | 'unavailable' | 'empty' | 'location-key-only'
+export type Availability =
+  | 'available'
+  | 'partial'
+  | 'unavailable'
+  | 'empty'
+  | 'missing'
+  | 'invalid'
+  | 'stale'
+  | 'location-key-only'
 export type ForecastMapRow = [number, number, number, number, number, number, number | null, number | null, number | null, string]
 
 export interface ForecastMapContract {
@@ -15,7 +23,7 @@ export interface ForecastMapContract {
   dataRange: {
     safeEventStartDate: string; safeEventEndDate: string; firstObservedWeek: string
     latestObservedWeek: string; latestCompleteWeek: string; latestWeekIsPartial: boolean
-    supportedForecastWeeks: [string]
+    supportedForecastWeeks: string[]
   }
   dimensions: { forecastWeeks: string[]; boroughs: string[]; precincts: string[]; offenseTypes: string[]; lawCategories: string[] }
   filterIndex: { precinctsByBorough: { rowColumns: string[]; rows: Array<[number, number[]]>; semantics: string } }
@@ -23,7 +31,7 @@ export interface ForecastMapContract {
     status: ForecastMapStatus; sourceFile: string; reason?: string; isEmpty: boolean
     rowColumns: string[]; rows: ForecastMapRow[]
     summary: {
-      rowCount: number; sourceRowCount: number; sourceSegmentCount: number; withheldRowCount: number
+      rowCount: number; sourceRowCount: number | null; sourceSegmentCount: number | null; withheldRowCount: number | null
       predictedTotal: number | null; sourcePredictedTotal: number | null; withheldPredictedTotal: number | null
       rowCoveragePct: number | null; predictedVolumeCoveragePct: number | null; modelSegmentCoveragePct: number | null
       publishedBoroughCount: number; publishedPrecinctCount: number; zeroPredictionRowCount: number
@@ -33,13 +41,48 @@ export interface ForecastMapContract {
   }
   availability: Record<string, Availability>
   model: {
-    status: 'available'; artifactType: 'weekly_forecast_ml_model'; artifactVersion: 1
-    name: string; version: number; forecastWeek: string; trainingStartWeek: string; trainingThroughWeek: string
-    leakageControlsVerified: true; pointEstimatesOnly: true; predictionIntervalsAvailable: false
-    historicalError: { status: 'available'; mae: number; rmse: number; weightedMae?: number; predictionCoveragePct: number; backtestRowCount: number; backtestStartWeek: string; backtestEndWeek: string; unit: string; scope: string; filterSemantics: string; sourceFile: string }
+    status: ForecastMapStatus
+    reason?: string
+    artifactType: 'weekly_forecast_ml_model' | null
+    artifactVersion: 1 | null
+    name: string | null
+    version: number | null
+    forecastWeek: string | null
+    trainingStartWeek: string | null
+    trainingThroughWeek: string | null
+    leakageControlsVerified: boolean
+    pointEstimatesOnly: true
+    predictionIntervalsAvailable: false
+    historicalError: {
+      status: 'available' | 'missing' | 'invalid'
+      reason?: string
+      mae?: number
+      rmse?: number
+      weightedMae?: number | null
+      predictionCoveragePct?: number
+      backtestRowCount?: number
+      backtestStartWeek?: string
+      backtestEndWeek?: string
+      unit?: string
+      scope?: string
+      filterSemantics?: string
+      sourceFile: string
+    }
     sourceFile: string
   }
-  baseline: { status: string; method: string; priorOnly: true; requiredPriorWeeks: number; semantics: string; valueAvailability: string; zeroFillRule: string; summary: { publishedRowCount: number; baselineAvailableRowCount: number; baselineUnavailableRowCount: number; expectedChangeCountAvailableRowCount: number; expectedChangePctAvailableRowCount: number; zeroBaselineRowCount: number }; sourceFile: string; manifestSourceFile: string }
+  baseline: {
+    status: ForecastMapStatus
+    reason?: string
+    method: string | null
+    priorOnly: true | null
+    requiredPriorWeeks: number | null
+    semantics: string | null
+    valueAvailability: 'available' | 'partial' | 'unavailable'
+    zeroFillRule: string | null
+    summary: { publishedRowCount: number; baselineAvailableRowCount: number; baselineUnavailableRowCount: number; expectedChangeCountAvailableRowCount: number; expectedChangePctAvailableRowCount: number; zeroBaselineRowCount: number }
+    sourceFile: string
+    manifestSourceFile: string
+  }
   methodology: { arithmeticTolerance: number; numericRoundingDigits: number; [key: string]: unknown }
   locationKeySemantics: { coordinatesIncluded: false; geometryIncluded: false; spatialReferenceAvailable: false; stableJoinKeyOnly: true; scheme: string; coverage: string }
   forecastSemantics: Record<string, unknown>

@@ -7,13 +7,18 @@ import {
   Layers3,
   RefreshCw,
   ShieldAlert,
-  TrendingUp,
 } from 'lucide-react'
 import { useEffect, useMemo, useState } from 'react'
 import { filterMapHotspots } from '../data/filterMap'
 import { aggregateForecastPrecincts, forecastCompatibility } from '../data/filterForecastMap'
 import { loadMap } from '../data/loadMap'
 import { loadForecastMap } from '../data/loadForecastMap'
+import {
+  loadPrecinctSpatialReference,
+  PrecinctSpatialReferenceError,
+  reconcilePrecinctSpatialReference,
+  type PrecinctSpatialReferenceErrorCode,
+} from '../data/loadPrecinctSpatialReference'
 import type { ForecastMapContract, ForecastMapLoader, PrecinctForecast, PredictiveMode } from '../types/forecastMap'
 import type {
   HotspotLayer,
@@ -23,9 +28,22 @@ import type {
   MapLoader,
 } from '../types/map'
 import type { OverviewFilters, OverviewMetadata } from '../types/overview'
+import type {
+  PrecinctSpatialReferenceContract,
+  PrecinctSpatialReferenceLoader,
+} from '../types/precinctSpatialReference'
 import { formatDate, formatDecimal, formatInteger } from '../utils/format'
 import { FilterToolbar } from './FilterToolbar'
 import { HotspotMap } from './HotspotMap'
+import {
+  PrecinctForecastMap,
+  type PredictiveTileStatus,
+} from './PrecinctForecastMap'
+import {
+  createExpectedChangeScale,
+  createForecastVolumeScale,
+  formatPredictiveValue,
+} from './precinctForecastScale'
 
 export interface MapViewProps {
   metadata: OverviewMetadata
@@ -34,6 +52,7 @@ export interface MapViewProps {
   onReset: () => void
   mapLoader?: MapLoader
   forecastMapLoader?: ForecastMapLoader
+  precinctSpatialReferenceLoader?: PrecinctSpatialReferenceLoader
 }
 
 type MapLoadState =
@@ -42,6 +61,10 @@ type MapLoadState =
   | { status: 'ready'; contract: MapDataContract }
 
 type ForecastLoadState = { status: 'loading' } | { status: 'error' } | { status: 'ready'; contract: ForecastMapContract }
+type SpatialLoadState =
+  | { status: 'idle' | 'loading' }
+  | { status: 'error'; code: PrecinctSpatialReferenceErrorCode }
+  | { status: 'ready'; contract: PrecinctSpatialReferenceContract }
 type AnalyticalMode = 'hotspots' | PredictiveMode
 
 const LAYERS: Array<{ value: HotspotLayer; label: string; shortLabel: string }> = [
@@ -487,7 +510,7 @@ function OperationalMap({
   )
 }
 
-const signed = (value: number) => `${value > 0 ? '+' : ''}${formatDecimal(value)}`
+const signed = (value: number) => `${value > 0 ? '+' : ''}${formatPredictiveValue(value)}`
 
 function ForecastDetail({ row, contract }: { row: PrecinctForecast | null; contract: ForecastMapContract }) {
   if (!row) return <aside className="hotspot-detail" aria-label="Forecast detail"><h3>No precinct selected</h3><p className="hotspot-detail__empty">No forecast rows match the active filters.</p></aside>
@@ -496,44 +519,277 @@ function ForecastDetail({ row, contract }: { row: PrecinctForecast | null; contr
     <div className="hotspot-detail__heading"><h3 id="forecast-detail-title">{row.borough} · Precinct {row.precinct}</h3></div>
     <p className="hotspot-detail__context">Expected aggregate reported-event volume · week of {formatDate(row.forecastWeek)}</p>
     <dl className="hotspot-detail__metrics">
-      <div><dt>Forecast</dt><dd>{formatDecimal(row.predictedCount)}</dd></div>
-      <div><dt>Historical baseline</dt><dd>{row.historicalBaseline===null?'Unavailable':formatDecimal(row.historicalBaseline)}</dd></div>
+      <div><dt>Forecast</dt><dd>{formatPredictiveValue(row.predictedCount)}</dd></div>
+      <div><dt>Historical baseline</dt><dd>{row.historicalBaseline===null?'Unavailable':formatPredictiveValue(row.historicalBaseline)}</dd></div>
       <div><dt>Expected change</dt><dd>{row.expectedChangeCount===null?'Unavailable':`${row.direction} · ${signed(row.expectedChangeCount)}`}</dd></div>
-      <div><dt>Expected change %</dt><dd>{row.expectedChangePct===null?'Not available':`${signed(row.expectedChangePct)}%`}</dd></div>
+      <div><dt>Expected change %</dt><dd>{row.historicalBaseline===0?'Not defined for a zero baseline':row.expectedChangePct===null?'Not available':`${signed(row.expectedChangePct)}%`}</dd></div>
     </dl>
-    {row.baselineRows<row.totalRows && <p className="forecast-baseline-note" role="note">Baseline coverage is partial ({row.baselineRows} of {row.totalRows} contributing rows); aggregate change is withheld rather than treating missing history as zero.</p>}
+    {row.baselineRows<row.totalRows && <p className="forecast-baseline-note" role="note">{row.baselineRows===0?'Historical baseline is unavailable for every contributing row':`Baseline coverage is partial (${row.baselineRows} of ${row.totalRows} contributing rows)`}; aggregate change is withheld rather than treating missing history as zero.</p>}
     <details className="data-context"><summary><span>Model and responsible use</span><ChevronDown aria-hidden="true" size={15}/></summary><div className="data-context__body">
-      <p>{contract.model.name} v{contract.model.version}. Overall historical MAE {formatDecimal(error.mae)}, RMSE {formatDecimal(error.rmse)}{error.weightedMae!==undefined?`, weighted MAE ${formatDecimal(error.weightedMae)}`:''}; coverage {formatDecimal(error.predictionCoveragePct)}%.</p>
-      <p>These are overall backtest errors, not filter-specific uncertainty. No prediction interval is available.</p>
+      <p>{contract.model.name} v{contract.model.version}.</p>
+      {error.status==='available' && error.mae!==undefined && error.rmse!==undefined && error.predictionCoveragePct!==undefined
+        ? <p>Overall historical MAE {formatDecimal(error.mae)}, RMSE {formatDecimal(error.rmse)}{error.weightedMae!==undefined&&error.weightedMae!==null?`, weighted MAE ${formatDecimal(error.weightedMae)}`:''}; coverage {formatDecimal(error.predictionCoveragePct)}%. These are overall backtest errors, not filter-specific uncertainty.</p>
+        : <p>Historical backtest error context is unavailable; the interface does not infer uncertainty from missing metrics.</p>}
+      <p>No prediction interval is available.</p>
       <p>Point estimates describe aggregate reported-event volume, not certainty, individual behavior, a specific future incident location, or grounds for patrol or enforcement action.</p>
     </div></details>
   </aside>
 }
 
-function PredictiveWorkspace({ contract, metadata, filters, mode, selectedId, onSelect }: { contract: ForecastMapContract; metadata: OverviewMetadata; filters: OverviewFilters; mode: PredictiveMode; selectedId: string|null; onSelect:(id:string)=>void }) {
-  const rows=useMemo(()=>aggregateForecastPrecincts(contract,metadata,filters),[contract,metadata,filters])
-  const selected=rows.find(r=>r.id===selectedId)??rows[0]??null
-  const total=rows.reduce((sum,r)=>sum+r.predictedCount,0)
+type SpatialResolution =
+  | { status: 'idle' | 'loading' }
+  | { status: 'error'; code: PrecinctSpatialReferenceErrorCode }
+  | { status: 'ready'; contract: PrecinctSpatialReferenceContract }
+
+function resolveSpatialReference(
+  state: SpatialLoadState,
+  forecast: ForecastMapContract,
+): SpatialResolution {
+  if (state.status !== 'ready') return state
+  try {
+    return {
+      status: 'ready',
+      contract: reconcilePrecinctSpatialReference(state.contract, forecast),
+    }
+  } catch (error) {
+    return {
+      status: 'error',
+      code:
+        error instanceof PrecinctSpatialReferenceError
+          ? error.code
+          : 'invalid-contract',
+    }
+  }
+}
+
+function PredictiveLegend({
+  rows,
+  mode,
+}: {
+  rows: PrecinctForecast[]
+  mode: PredictiveMode
+}) {
+  if (mode === 'forecast') {
+    const scale = createForecastVolumeScale(rows)
+    const [first, second, third] = scale.thresholds
+    return (
+      <div className="predictive-map-legend" role="group" aria-label="Forecast aggregate-volume scale">
+        <strong>Expected aggregate volume</strong>
+        <span><i className="forecast-volume-swatch forecast-volume-swatch--zero" aria-hidden="true" />0 (valid zero)</span>
+        {scale.maximum > 0 ? <>
+          <span><i className="forecast-volume-swatch forecast-volume-swatch--1" aria-hidden="true" />&gt;0–{formatPredictiveValue(first)}</span>
+          <span><i className="forecast-volume-swatch forecast-volume-swatch--2" aria-hidden="true" />{formatPredictiveValue(first)}–{formatPredictiveValue(second)}</span>
+          <span><i className="forecast-volume-swatch forecast-volume-swatch--3" aria-hidden="true" />{formatPredictiveValue(second)}–{formatPredictiveValue(third)}</span>
+          <span><i className="forecast-volume-swatch forecast-volume-swatch--4" aria-hidden="true" />Above {formatPredictiveValue(third)}</span>
+          <small>Four positive steps use the filtered 95th-percentile cap ({formatPredictiveValue(scale.maximum)}); values retain up to the contract's six decimal places in the legend, list, and detail.</small>
+        </> : <small>No positive forecasts are present in this filtered scope.</small>}
+      </div>
+    )
+  }
+
+  const scale = createExpectedChangeScale(rows)
+  return (
+    <div className="predictive-map-legend" role="group" aria-label="Expected-change direction and magnitude scale">
+      <strong>Expected change from baseline</strong>
+      <span><i className="change-swatch change-swatch--below" aria-hidden="true" />Below baseline</span>
+      <span><i className="change-swatch change-swatch--equal" aria-hidden="true" />Approximately equal (±0.000001)</span>
+      <span><i className="change-swatch change-swatch--above" aria-hidden="true" />Above baseline</span>
+      <span><i className="change-swatch change-swatch--unavailable" aria-hidden="true" />Baseline unavailable or partial</span>
+      <small>Darker fill means larger absolute change on a symmetric filtered 95th-percentile domain (±{formatPredictiveValue(scale.magnitudeMaximum)}). Dashed outlines identify missing or partial baseline coverage.</small>
+    </div>
+  )
+}
+
+const SPATIAL_STATE_COPY: Record<
+  PrecinctSpatialReferenceErrorCode,
+  { title: string; body: string }
+> = {
+  'missing-artifact': {
+    title: 'Precinct geography unavailable',
+    body: 'The verified precinct boundary artifact is missing. Forecast values remain available in the complete list and detail.',
+  },
+  network: {
+    title: 'Precinct geography could not load',
+    body: 'The boundary artifact could not be retrieved. Forecast values remain available in the complete list and detail.',
+  },
+  stale: {
+    title: 'Precinct geography out of date',
+    body: 'The reviewed official boundary edition is past its quarterly refresh window. Forecast values remain available in the complete list and detail.',
+  },
+  'malformed-json': {
+    title: 'Precinct geography invalid',
+    body: 'The boundary response is malformed, so no polygons are drawn. Forecast values remain available in the complete list and detail.',
+  },
+  'unsupported-version': {
+    title: 'Precinct geography version mismatch',
+    body: 'This boundary contract version is not supported by the Forecast view. No polygons are drawn.',
+  },
+  'incompatible-identity': {
+    title: 'Precinct geography identity mismatch',
+    body: 'The boundary artifact does not identify the verified precinct spatial reference. No polygons are drawn.',
+  },
+  'invalid-provenance': {
+    title: 'Precinct geography provenance invalid',
+    body: 'Publisher, retrieval, checksum, or public-use metadata could not be verified. No polygons are drawn.',
+  },
+  'invalid-coordinate-reference': {
+    title: 'Precinct coordinate reference invalid',
+    body: 'The artifact does not declare the supported WGS84 longitude/latitude semantics. No polygons are drawn.',
+  },
+  'invalid-contract': {
+    title: 'Precinct geography invalid',
+    body: 'The boundary contract could not be verified. Forecast values remain available in the complete list and detail.',
+  },
+  'invalid-geometry': {
+    title: 'Precinct geometry invalid',
+    body: 'One or more polygon rings or coordinates are invalid. Partial geography is not drawn.',
+  },
+  'duplicate-location-key': {
+    title: 'Duplicate precinct geography',
+    body: 'A precinct is represented more than once. Ambiguous geography is not drawn.',
+  },
+  'unstable-feature-order': {
+    title: 'Precinct geography ordering invalid',
+    body: 'The spatial artifact is not in its required deterministic order. No polygons are drawn.',
+  },
+  'incomplete-coverage': {
+    title: 'Precinct geography incomplete',
+    body: 'The spatial artifact does not cover every published Forecast precinct. Partial geography is not drawn.',
+  },
+  'location-key-mismatch': {
+    title: 'Precinct geography key mismatch',
+    body: 'The spatial and Forecast precinct keys do not match exactly. No polygons are drawn.',
+  },
+  'forecast-incompatible': {
+    title: 'Forecast and geography versions do not align',
+    body: 'The Forecast and spatial contracts cannot be safely reconciled. Forecast values remain available in the complete list and detail.',
+  },
+}
+
+function PredictiveMapCanvas({
+  resolution,
+  rows,
+  mode,
+  selectedId,
+  onSelect,
+  onRetry,
+}: {
+  resolution: SpatialResolution
+  rows: PrecinctForecast[]
+  mode: PredictiveMode
+  selectedId: string | null
+  onSelect: (id: string) => void
+  onRetry: () => void
+}) {
+  const [tileStatus, setTileStatus] = useState<PredictiveTileStatus>('loading')
+
+  if (resolution.status !== 'ready') {
+    const loading = resolution.status === 'idle' || resolution.status === 'loading'
+    let copy: { title: string; body: string }
+    if (resolution.status === 'error') {
+      copy = SPATIAL_STATE_COPY[resolution.code]
+    } else {
+      copy = {
+        title: 'Loading precinct boundaries',
+        body: 'The complete precinct list and detail remain available while verified geography loads.',
+      }
+    }
+    return (
+      <section
+        className="map-canvas-panel forecast-canvas-neutral"
+        aria-labelledby="forecast-canvas-title"
+        aria-busy={loading || undefined}
+        role="status"
+      >
+        <div>
+          {loading ? <Database aria-hidden="true" size={34} /> : <ShieldAlert aria-hidden="true" size={34} />}
+          <h3 id="forecast-canvas-title">{copy.title}</h3>
+          <p>{copy.body}</p>
+          {!loading && <button type="button" onClick={onRetry}><RefreshCw aria-hidden="true" size={15} />Reload boundaries</button>}
+        </div>
+      </section>
+    )
+  }
+
+  return (
+    <section className="map-canvas-panel predictive-map-panel" aria-labelledby="forecast-canvas-title">
+      <h3 id="forecast-canvas-title" className="visually-hidden">
+        {mode === 'forecast' ? 'Forecast precinct map' : 'Expected-change precinct map'}
+      </h3>
+      <div className="predictive-map-context">
+        <PredictiveLegend rows={rows} mode={mode} />
+        {tileStatus === 'error' && <p className="predictive-tile-notice" role="status">Base map tiles are unavailable. Verified precinct polygons and the list/detail remain usable.</p>}
+      </div>
+      <PrecinctForecastMap
+        spatial={resolution.contract}
+        rows={rows}
+        mode={mode}
+        selectedId={selectedId}
+        onSelect={onSelect}
+        descriptionId="predictive-map-description"
+        onTileStatus={setTileStatus}
+      />
+      <p id="predictive-map-description" className="visually-hidden">
+        Verified administrative precinct polygons represent aggregate expected values, not precise future incident locations. Color is repeated as text in the legend, list, and detail. Use the precinct list for keyboard selection and complete values.
+      </p>
+    </section>
+  )
+}
+
+function PredictiveWorkspace({
+  contract,
+  metadata,
+  filters,
+  mode,
+  selectedId,
+  onSelect,
+  spatialState,
+  retrySpatial,
+}: {
+  contract: ForecastMapContract
+  metadata: OverviewMetadata
+  filters: OverviewFilters
+  mode: PredictiveMode
+  selectedId: string | null
+  onSelect: (id: string) => void
+  spatialState: SpatialLoadState
+  retrySpatial: () => void
+}) {
+  const rows = useMemo(
+    () => aggregateForecastPrecincts(contract, metadata, filters),
+    [contract, metadata, filters],
+  )
+  const selected = rows.find((row) => row.id === selectedId) ?? rows[0] ?? null
+  const total = rows.reduce((sum, row) => sum + row.predictedCount, 0)
+  const spatialResolution = useMemo(
+    () => resolveSpatialReference(spatialState, contract),
+    [contract, spatialState],
+  )
   return <section className="map-operational forecast-operational" aria-labelledby="map-operational-title">
-    <div className="map-operational__heading"><div><h2 id="map-operational-title">{mode==='forecast'?'Forecast':'Expected change'}</h2><p>Week of {formatDate(contract.dimensions.forecastWeeks[0])} · {formatInteger(rows.length)} precincts · {mode==='forecast'?`${formatDecimal(total)} expected aggregate reported events`:'compared with the prior-only historical baseline'}</p></div></div>
+    <div className="map-operational__heading"><div><h2 id="map-operational-title">{mode==='forecast'?'Forecast':'Expected change'}</h2><p>Week of {formatDate(contract.dimensions.forecastWeeks[0])} · {formatInteger(rows.length)} precincts · {mode==='forecast'?`${formatPredictiveValue(total)} expected aggregate reported events`:'compared with the prior-only historical baseline'}</p></div></div>
     {rows.length===0&&<div className="map-empty-notice" role="status"><Crosshair aria-hidden="true" size={18}/><div><strong>No forecast rows match these filters</strong><span>Adjust the categorical filters or reset the view.</span></div></div>}
     <div className="map-workspace">
-      <section className="map-canvas-panel forecast-canvas-neutral" aria-labelledby="forecast-canvas-title"><div><MapIconFallback/><h3 id="forecast-canvas-title">Spatial reference unavailable</h3><p>No complete verified precinct boundary or centroid artifact exists. Forecast values are not plotted using partial or fabricated geography. Use the complete precinct list and detail.</p></div></section>
-      <div className="map-side-stack"><ForecastDetail row={selected} contract={contract}/><section className="hotspot-register" aria-labelledby="forecast-register-title"><div className="hotspot-register__heading"><h3 id="forecast-register-title">Precinct forecast list</h3><span aria-live="polite">{formatInteger(rows.length)} results</span></div><ol className="hotspot-register__list">{rows.map(row=><li key={row.id}><button type="button" className={row.id===selected?.id?'is-selected':undefined} aria-pressed={row.id===selected?.id} aria-label={`Select precinct ${row.precinct}, ${formatDecimal(row.predictedCount)} forecast, ${row.direction} baseline`} onClick={()=>onSelect(row.id)}><span className="hotspot-register__rank">P{row.precinct}</span><span className="hotspot-register__identity"><strong>{row.borough} · Precinct {row.precinct}</strong><small>{mode==='forecast'?`${formatDecimal(row.predictedCount)} expected aggregate reported events`:row.expectedChangeCount===null?'Change unavailable':`${row.direction} baseline · ${signed(row.expectedChangeCount)}`}</small></span><span className={`forecast-direction forecast-direction--${row.direction.replace(' ','-')}`}>{row.direction}</span></button></li>)}</ol></section></div>
+      <PredictiveMapCanvas resolution={spatialResolution} rows={rows} mode={mode} selectedId={selected?.id??null} onSelect={onSelect} onRetry={retrySpatial}/>
+      <div className="map-side-stack"><ForecastDetail row={selected} contract={contract}/><section className="hotspot-register" aria-labelledby="forecast-register-title"><div className="hotspot-register__heading"><h3 id="forecast-register-title">{mode==='forecast'?'Precinct forecast list':'Precinct expected-change list'}</h3><span aria-live="polite">{formatInteger(rows.length)} results</span></div><ol className="hotspot-register__list">{rows.map(row=>{
+        const selectedRow=row.id===selected?.id
+        const missingBaseline=row.baselineRows<row.totalRows
+        const label=mode==='forecast'
+          ? `Select precinct ${row.precinct}, ${formatPredictiveValue(row.predictedCount)} expected aggregate reported events${row.predictedCount===0?', valid zero forecast':''}`
+          : `Select precinct ${row.precinct}, ${missingBaseline?'expected change unavailable':`${row.direction} baseline${row.expectedChangeCount===null?'':`, ${signed(row.expectedChangeCount)}`}`}`
+        return <li key={row.id}><button type="button" className={selectedRow?'is-selected':undefined} aria-pressed={selectedRow} aria-label={label} onClick={()=>onSelect(row.id)}><span className="hotspot-register__rank">P{row.precinct}</span><span className="hotspot-register__identity"><strong>{row.borough} · Precinct {row.precinct}</strong><small>{mode==='forecast'?`${formatPredictiveValue(row.predictedCount)} expected aggregate reported events${row.predictedCount===0?' · valid zero':''}`:missingBaseline?`Change unavailable · ${row.baselineRows===0?'baseline missing':'partial baseline'}`:row.expectedChangeCount===null?'Change unavailable':`${row.direction} baseline · ${signed(row.expectedChangeCount)}`}</small></span><span className={`forecast-direction ${mode==='forecast'?'forecast-direction--volume':`forecast-direction--${row.direction.replace(' ','-')}`}`}>{mode==='forecast'?(row.predictedCount===0?'zero':'volume'):row.direction}</span></button></li>
+      })}</ol></section></div>
     </div>
   </section>
 }
 
-function MapIconFallback(){return <TrendingUp aria-hidden="true" size={34}/>}
-
-function PredictiveState({ state, metadata, filters, retry, mode, selectedId, onSelect }: { state:ForecastLoadState; metadata:OverviewMetadata; filters:OverviewFilters; retry:()=>void; mode:PredictiveMode; selectedId:string|null; onSelect:(id:string)=>void }) {
+function PredictiveState({ state, metadata, filters, retry, mode, selectedId, onSelect, spatialState, retrySpatial }: { state:ForecastLoadState; metadata:OverviewMetadata; filters:OverviewFilters; retry:()=>void; mode:PredictiveMode; selectedId:string|null; onSelect:(id:string)=>void; spatialState:SpatialLoadState; retrySpatial:()=>void }) {
   if(state.status==='loading') return <LoadingMapState/>
   if(state.status==='error') return <section className="map-state-panel map-state-panel--error" role="alert"><AlertTriangle aria-hidden="true" size={26}/><div><h2>Forecast unavailable</h2><p>The Forecast Map artifact could not be loaded or validated.</p><button type="button" onClick={retry}><RefreshCw aria-hidden="true" size={15}/>Retry</button></div></section>
   const c=state.contract, compatibility=forecastCompatibility(c,metadata,filters)
   if(c.forecast.status!=='available') return <section className={`map-state-panel map-state-panel--${c.forecast.status}`} role="status"><ShieldAlert aria-hidden="true" size={26}/><div><h2>{c.forecast.status==='missing'?'No forecast artifact':c.forecast.status==='invalid'?'Forecast artifact invalid':'Forecast artifact stale'}</h2><p>No forecast values are shown.</p></div></section>
   if(compatibility!=='compatible') return <section className="map-state-panel map-state-panel--historical" role="status"><Info aria-hidden="true" size={26}/><div><h2>{compatibility==='unsupported-date'?'Forecast unavailable for this historical selection':'Overview and Forecast dates do not align'}</h2><p>{compatibility==='forecast-older'?'Overview is newer than the Forecast observation horizon.':compatibility==='forecast-newer'?'Forecast is newer than Overview.':compatibility==='overview-older'?'Overview does not reach the Forecast observation horizon.':'The fixed next-week forecast is shown only when the selected range includes the latest complete source week.'}</p></div></section>
   if(c.forecast.isEmpty) return <section className="map-state-panel" role="status"><Info aria-hidden="true" size={26}/><div><h2>Forecast available but empty</h2><p>The valid artifact contains no forecast rows; this is not a zero forecast.</p></div></section>
-  return <PredictiveWorkspace contract={c} metadata={metadata} filters={filters} mode={mode} selectedId={selectedId} onSelect={onSelect}/>
+  return <PredictiveWorkspace contract={c} metadata={metadata} filters={filters} mode={mode} selectedId={selectedId} onSelect={onSelect} spatialState={spatialState} retrySpatial={retrySpatial}/>
 }
 
 export default function MapView({
@@ -543,6 +799,7 @@ export default function MapView({
   onReset,
   mapLoader = loadMap,
   forecastMapLoader = loadForecastMap,
+  precinctSpatialReferenceLoader = loadPrecinctSpatialReference,
 }: MapViewProps) {
   const [loadKey, setLoadKey] = useState(0)
   const [state, setState] = useState<MapLoadState>({ status: 'loading' })
@@ -551,6 +808,9 @@ export default function MapView({
   const [mode, setMode] = useState<AnalyticalMode>('hotspots')
   const [forecastKey, setForecastKey] = useState(0)
   const [forecastState, setForecastState] = useState<ForecastLoadState>({status:'loading'})
+  const [spatialRequested, setSpatialRequested] = useState(false)
+  const [spatialKey, setSpatialKey] = useState(0)
+  const [spatialState, setSpatialState] = useState<SpatialLoadState>({status:'idle'})
 
   useEffect(() => {
     let active = true
@@ -568,6 +828,28 @@ export default function MapView({
 
   useEffect(()=>{let active=true; forecastMapLoader().then(contract=>{if(active)setForecastState({status:'ready',contract})}).catch(()=>{if(active)setForecastState({status:'error'})});return()=>{active=false}},[forecastKey,forecastMapLoader])
 
+  useEffect(() => {
+    if (!spatialRequested) return
+    let active = true
+    precinctSpatialReferenceLoader()
+      .then((contract) => {
+        if (active) setSpatialState({ status: 'ready', contract })
+      })
+      .catch((error: unknown) => {
+        if (!active) return
+        setSpatialState({
+          status: 'error',
+          code:
+            error instanceof PrecinctSpatialReferenceError
+              ? error.code
+              : 'network',
+        })
+      })
+    return () => {
+      active = false
+    }
+  }, [precinctSpatialReferenceLoader, spatialKey, spatialRequested])
+
   const retry = () => {
     setState({ status: 'loading' })
     setLoadKey((value) => value + 1)
@@ -576,6 +858,11 @@ export default function MapView({
     setLayer('all')
     setSelectedId(null)
     onReset()
+  }
+  const retrySpatial = () => {
+    setSpatialRequested(true)
+    setSpatialState({ status: 'loading' })
+    setSpatialKey((value) => value + 1)
   }
   const showsCurrentSnapshot =
     filters.endWeek >= metadata.dataRange.latestCompleteWeek
@@ -591,10 +878,10 @@ export default function MapView({
       />
 
       <div className="map-mode-control" role="group" aria-label="Map analytical mode">
-        {([['hotspots','Hotspots'],['forecast','Forecast'],['change','Expected change']] as const).map(([value,label])=><button key={value} type="button" aria-pressed={mode===value} className={mode===value?'is-active':undefined} onClick={()=>{setMode(value);setSelectedId(null)}}>{label}</button>)}
+        {([['hotspots','Hotspots'],['forecast','Forecast'],['change','Expected change']] as const).map(([value,label])=><button key={value} type="button" aria-pressed={mode===value} className={mode===value?'is-active':undefined} onClick={()=>{setMode(value);setSelectedId(null);if(value!=='hotspots'){if(!spatialRequested)setSpatialState({status:'loading'});setSpatialRequested(true)}}}>{label}</button>)}
       </div>
 
-      {mode!=='hotspots' ? <PredictiveState state={forecastState} metadata={metadata} filters={filters} mode={mode} selectedId={selectedId} onSelect={setSelectedId} retry={()=>{setForecastState({status:'loading'});setForecastKey(v=>v+1)}}/> : state.status === 'loading' ? (
+      {mode!=='hotspots' ? <PredictiveState state={forecastState} metadata={metadata} filters={filters} mode={mode} selectedId={selectedId} onSelect={setSelectedId} retry={()=>{setForecastState({status:'loading'});setForecastKey(v=>v+1)}} spatialState={spatialState} retrySpatial={retrySpatial}/> : state.status === 'loading' ? (
         <LoadingMapState />
       ) : state.status === 'error' ? (
         <ErrorMapState retry={retry} />

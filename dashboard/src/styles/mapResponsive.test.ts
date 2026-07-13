@@ -90,6 +90,27 @@ describe('Map responsive layout contract', () => {
     expect(appCss).toMatch(
       /\.data-context > summary\s*{[^}]*min-height:\s*44px;/s,
     )
+    expect(appCss).toMatch(
+      /\.map-mode-control button\s*{[^}]*min-height:\s*44px;/s,
+    )
+    expect(appCss).toMatch(
+      /\.forecast-canvas-neutral button\s*{[^}]*min-height:\s*44px;/s,
+    )
+  })
+
+  it('keeps the predictive legend, polygon canvas, and missing-baseline key responsive', () => {
+    expect(appCss).toMatch(
+      /\.predictive-map-panel\s*{[^}]*grid-template-rows:\s*auto minmax\(0, 1fr\);/s,
+    )
+    expect(appCss).toMatch(
+      /\.predictive-map-legend\s*{[^}]*flex-wrap:\s*wrap;/s,
+    )
+    expect(appCss).toMatch(
+      /\.change-swatch--unavailable\s*{[^}]*border:\s*2px dashed/s,
+    )
+    expect(appCss).toMatch(
+      /\.precinct-forecast-map\s*{[^}]*min-height:\s*460px;/s,
+    )
   })
 
   it('provides a solid surface fallback before enhancing supported glass', () => {

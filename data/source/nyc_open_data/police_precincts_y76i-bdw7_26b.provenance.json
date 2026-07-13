@@ -1,0 +1,56 @@
+{
+  "schemaVersion": "1.0.0",
+  "dataset": {
+    "title": "Police Precincts",
+    "datasetId": "y76i-bdw7",
+    "edition": "26B",
+    "publisher": "New York City Department of City Planning (DCP)",
+    "updateFrequency": "Quarterly",
+    "dataDate": "2026-05",
+    "datasetPageUrl": "https://data.cityofnewyork.us/City-Government/Police-Precincts/y76i-bdw7",
+    "publisherPageUrl": "https://www.nyc.gov/content/planning/pages/resources/datasets/police-precincts",
+    "metadataApiUrl": "https://data.cityofnewyork.us/api/views/y76i-bdw7",
+    "metadataPdfUrl": "https://s-media.nyc.gov/agencies/dcp/assets/files/pdf/data-tools/bytes/nypp_metadata.pdf"
+  },
+  "retrieval": {
+    "retrievalUrl": "https://data.cityofnewyork.us/api/geospatial/y76i-bdw7?method=export&format=GeoJSON",
+    "retrievedAtUtc": "2026-07-12T18:35:09Z",
+    "portalRowsUpdatedAtUtc": "2026-05-26T19:46:58Z",
+    "originalFilename": "Police Precincts.geojson",
+    "vendoredFilename": "police_precincts_y76i-bdw7_26b.geojson",
+    "mediaType": "application/vnd.geo+json",
+    "byteSize": 3842773,
+    "sha256": "5210830afa9d0875b7a7c769edfc4d2ebe984a9ab1e36f3b7fad8508828172aa",
+    "repeatDownloadByteIdentical": true
+  },
+  "sourceSchema": {
+    "rootType": "FeatureCollection",
+    "featureCount": 78,
+    "geometryType": "MultiPolygon",
+    "propertyFields": [
+      "precinct",
+      "shape_area",
+      "shape_leng"
+    ],
+    "nativeCoordinateReference": "EPSG:2263",
+    "nativeCoordinateReferenceName": "NAD83 / New York Long Island (US survey feet)",
+    "exportCoordinateReference": "OGC:CRS84",
+    "exportAxisOrder": "longitude, latitude",
+    "conversion": "NYC Open Data supplied the GeoJSON export in WGS84 longitude/latitude; repository processing performs no reprojection."
+  },
+  "publicUse": {
+    "namedLicense": null,
+    "assessment": "license-compatible public data",
+    "termsUrl": "https://opendata.cityofnewyork.us/overview/",
+    "faqUrl": "https://opendata.cityofnewyork.us/faq/",
+    "technicalStandardsUrl": "https://opendata.cityofnewyork.us/wp-content/uploads/NYC_OpenData_TechnicalStandardsManual.pdf",
+    "summary": "NYC Open Data states that Open Data has no use restrictions, and DCP metadata states that this dataset is freely available to the public with no fee. The City and DCP provide it for informational purposes without warranties of completeness, accuracy, content, or fitness for a particular use."
+  },
+  "privacy": {
+    "administrativeBoundaryGeometryOnly": true,
+    "complaintOrEventRecordsPresent": false,
+    "personOrAddressRecordsPresent": false,
+    "demographicAttributesPresent": false,
+    "aggregatePublicVisualizationSuitable": true
+  }
+}

@@ -9,8 +9,13 @@ import { mapFixture } from '../test/mapFixture'
 import { overviewFixture } from '../test/fixture'
 import MapView from './MapView'
 import forecastArtifact from '../../public/data/forecast-map.json'
+import spatialArtifact from '../../public/data/precinct-spatial-reference.json'
 import overviewMetadataArtifact from '../../public/data/overview.json'
 import { decodeForecastMap } from '../data/loadForecastMap'
+import {
+  decodePrecinctSpatialReference,
+  PrecinctSpatialReferenceError,
+} from '../data/loadPrecinctSpatialReference'
 import type { OverviewMetadata } from '../types/overview'
 
 vi.mock('./HotspotMap', () => ({
@@ -36,6 +41,39 @@ vi.mock('./HotspotMap', () => ({
           {hotspot.locationLabel}
         </button>
       ))}
+    </div>
+  ),
+}))
+
+vi.mock('./PrecinctForecastMap', () => ({
+  PrecinctForecastMap: ({
+    rows,
+    selectedId,
+    onSelect,
+    mode,
+    onTileStatus,
+  }: {
+    rows: Array<{ id: string; precinct: string }>
+    selectedId: string | null
+    onSelect: (id: string) => void
+    mode: string
+    onTileStatus?: (status: 'error') => void
+  }) => (
+    <div data-testid="predictive-map" data-count={rows.length} data-mode={mode}>
+      {rows.map((row) => (
+        <button
+          key={row.id}
+          type="button"
+          aria-label={`Mock forecast polygon precinct ${row.precinct}`}
+          aria-pressed={row.id === selectedId}
+          onClick={() => onSelect(row.id)}
+        >
+          Precinct {row.precinct}
+        </button>
+      ))}
+      <button type="button" onClick={() => onTileStatus?.('error')}>
+        Simulate predictive tile failure
+      </button>
     </div>
   ),
 }))
@@ -253,18 +291,27 @@ describe('Map filtering and selection', () => {
 })
 
 describe('Predictive Map modes', () => {
-  function PredictiveHarness() {
+  function PredictiveHarness({
+    spatialLoader = async () =>
+      decodePrecinctSpatialReference(structuredClone(spatialArtifact)),
+    forecastLoader = async () => decodeForecastMap(structuredClone(forecastArtifact)),
+  }: {
+    spatialLoader?: () => Promise<ReturnType<typeof decodePrecinctSpatialReference>>
+    forecastLoader?: () => Promise<ReturnType<typeof decodeForecastMap>>
+  } = {}) {
     const metadata=overviewMetadataArtifact as unknown as OverviewMetadata
     const defaults=defaultFilters(metadata)
     const [filters,setFilters]=useState(defaults)
-    return <MapView metadata={metadata} filters={filters} onFilters={setFilters} onReset={()=>setFilters(defaults)} mapLoader={async()=>mapFixture()} forecastMapLoader={async()=>decodeForecastMap(structuredClone(forecastArtifact))}/>
+    return <MapView metadata={metadata} filters={filters} onFilters={setFilters} onReset={()=>setFilters(defaults)} mapLoader={async()=>mapFixture()} forecastMapLoader={forecastLoader} precinctSpatialReferenceLoader={spatialLoader}/>
   }
 
-  it('switches to the complete keyboard-accessible Forecast list/detail with neutral geography', async () => {
+  it('renders verified polygons and keeps polygon, keyboard list, and detail selection synchronized', async () => {
     const user=userEvent.setup()
     render(<PredictiveHarness/>)
     await user.click(screen.getByRole('button',{name:'Forecast'}))
-    expect(await screen.findByRole('heading',{name:'Spatial reference unavailable'})).toBeInTheDocument()
+    const map=await screen.findByTestId('predictive-map')
+    expect(map).toHaveAttribute('data-count','78')
+    expect(screen.getByRole('group',{name:'Forecast aggregate-volume scale'})).toHaveTextContent(/95th-percentile cap/i)
     expect(screen.getByRole('heading',{name:'Precinct forecast list'})).toBeInTheDocument()
     const buttons=screen.getAllByRole('button',{name:/select precinct/i})
     expect(buttons).toHaveLength(78)
@@ -272,6 +319,82 @@ describe('Predictive Map modes', () => {
     expect(buttons[1]).toHaveAttribute('aria-pressed','true')
     expect(screen.getByRole('complementary')).toHaveTextContent(/Expected aggregate reported-event volume/i)
     expect(screen.getByRole('complementary')).toHaveTextContent(/No prediction interval is available/i)
+
+    await user.click(screen.getByRole('button',{name:'Mock forecast polygon precinct 1'}))
+    expect(screen.getByRole('button',{name:/Select precinct 1,/i})).toHaveAttribute('aria-pressed','true')
+    expect(screen.getByRole('complementary')).toHaveTextContent('Precinct 1')
+  })
+
+  it('keeps filtered polygon counts exact and distinguishes a filter-empty result', async () => {
+    const user = userEvent.setup()
+    render(<PredictiveHarness />)
+    await user.click(screen.getByRole('button', { name: 'Forecast' }))
+
+    await user.selectOptions(screen.getByLabelText('Borough'), 'BRONX')
+    await waitFor(() => {
+      expect(screen.getByTestId('predictive-map')).toHaveAttribute(
+        'data-count',
+        '12',
+      )
+    })
+    expect(screen.getAllByRole('button', { name: /select precinct/i })).toHaveLength(
+      12,
+    )
+
+    await user.selectOptions(screen.getByLabelText('Borough'), 'MANHATTAN')
+    await user.selectOptions(screen.getByLabelText('Offense type'), 'ABORTION')
+    await waitFor(() => {
+      expect(screen.getByTestId('predictive-map')).toHaveAttribute(
+        'data-count',
+        '0',
+      )
+    })
+    expect(
+      screen.getByText('No forecast rows match these filters'),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('complementary')).toHaveTextContent(
+      'No precinct selected',
+    )
+    expect(screen.queryByRole('button', { name: /select precinct/i })).not.toBeInTheDocument()
+  })
+
+  it('keeps a real small positive forecast distinct from valid zero in both predictive modes', async () => {
+    const user = userEvent.setup()
+    render(<PredictiveHarness />)
+    await user.click(screen.getByRole('button', { name: 'Forecast' }))
+
+    await user.selectOptions(screen.getByLabelText('Borough'), 'BROOKLYN')
+    await user.selectOptions(screen.getByLabelText('Precinct'), '66')
+    await user.selectOptions(
+      screen.getByLabelText('Offense type'),
+      'UNLAWFUL POSS. WEAP. ON SCHOOL',
+    )
+    await user.selectOptions(screen.getByLabelText('Law category'), 'VIOLATION')
+
+    expect(
+      await screen.findByRole('button', {
+        name: 'Select precinct 66, 0.00102 expected aggregate reported events',
+      }),
+    ).toBeInTheDocument()
+    const forecastLegend = screen.getByRole('group', {
+      name: 'Forecast aggregate-volume scale',
+    })
+    expect(forecastLegend).toHaveTextContent('>0–0.000255')
+    expect(forecastLegend).toHaveTextContent('0.00102')
+    expect(screen.getByRole('complementary')).toHaveTextContent('0.00102')
+    expect(screen.getByRole('complementary')).not.toHaveTextContent(
+      /Forecast\s+0\.0(?:\D|$)/,
+    )
+
+    await user.click(screen.getByRole('button', { name: 'Expected change' }))
+    expect(
+      screen.getByRole('button', {
+        name: 'Select precinct 66, above baseline, +0.00102',
+      }),
+    ).toBeInTheDocument()
+    expect(screen.getByRole('complementary')).toHaveTextContent(
+      'above · +0.00102',
+    )
   })
 
   it('shows signed direction text in Expected change mode and preserves Hotspots', async () => {
@@ -280,8 +403,43 @@ describe('Predictive Map modes', () => {
     await user.click(screen.getByRole('button',{name:'Expected change'}))
     expect(await screen.findByRole('heading',{name:'Expected change'})).toBeInTheDocument()
     expect(screen.getAllByText(/above|below|approximately equal/i).length).toBeGreaterThan(0)
+    const legend=screen.getByRole('group',{name:'Expected-change direction and magnitude scale'})
+    expect(legend).toHaveTextContent('Below baseline')
+    expect(legend).toHaveTextContent('Above baseline')
+    expect(legend).toHaveTextContent('Baseline unavailable or partial')
     await user.click(screen.getByRole('button',{name:'Hotspots'}))
     expect(screen.getByRole('button',{name:'Hotspots'})).toHaveAttribute('aria-pressed','true')
+  })
+
+  it('keeps polygons and the complete non-map path usable when raster tiles fail', async () => {
+    const user=userEvent.setup()
+    render(<PredictiveHarness/>)
+    await user.click(screen.getByRole('button',{name:'Forecast'}))
+    await screen.findByTestId('predictive-map')
+    await user.click(screen.getByRole('button',{name:'Simulate predictive tile failure'}))
+    expect(screen.getByRole('status')).toHaveTextContent('Base map tiles are unavailable')
+    expect(screen.getByTestId('predictive-map')).toHaveAttribute('data-count','78')
+    expect(screen.getAllByRole('button',{name:/select precinct/i})).toHaveLength(78)
+  })
+
+  it.each([
+    ['missing-artifact','Precinct geography unavailable'],
+    ['network','Precinct geography could not load'],
+    ['stale','Precinct geography out of date'],
+    ['invalid-contract','Precinct geography invalid'],
+    ['incomplete-coverage','Precinct geography incomplete'],
+    ['location-key-mismatch','Precinct geography key mismatch'],
+  ] as const)('keeps list/detail available for the %s spatial state', async (code,title) => {
+    const user=userEvent.setup()
+    const spatialLoader=async()=>{
+      throw new PrecinctSpatialReferenceError(code,'fixture spatial state')
+    }
+    render(<PredictiveHarness spatialLoader={spatialLoader}/>)
+    await user.click(screen.getByRole('button',{name:'Forecast'}))
+    expect(await screen.findByRole('heading',{name:title})).toBeInTheDocument()
+    expect(screen.getAllByRole('button',{name:/select precinct/i})).toHaveLength(78)
+    expect(screen.getByRole('complementary')).toHaveTextContent(/Expected aggregate reported-event volume/i)
+    expect(screen.queryByTestId('predictive-map')).not.toBeInTheDocument()
   })
 
   it('does not reuse the fixed forecast for an unsupported historical range', async () => {
@@ -290,5 +448,48 @@ describe('Predictive Map modes', () => {
     fireEvent.input(screen.getByLabelText('End week'),{target:{value:'2025-12-15'}})
     await user.click(screen.getByRole('button',{name:'Forecast'}))
     expect(await screen.findByRole('heading',{name:'Forecast unavailable for this historical selection'})).toBeInTheDocument()
+  })
+
+  it.each([
+    ['missing','No forecast artifact'],
+    ['invalid','Forecast artifact invalid'],
+    ['stale','Forecast artifact stale'],
+  ] as const)('renders a distinct %s Forecast artifact state', async (status,title) => {
+    const contract=decodeForecastMap(structuredClone(forecastArtifact))
+    contract.forecast.status=status
+    contract.forecast.reason=`Fixture ${status} forecast.`
+    contract.forecast.isEmpty=false
+    const user=userEvent.setup()
+    render(<PredictiveHarness forecastLoader={async()=>contract}/>)
+    await user.click(screen.getByRole('button',{name:'Forecast'}))
+    expect(await screen.findByRole('heading',{name:title})).toBeInTheDocument()
+    expect(screen.queryByTestId('predictive-map')).not.toBeInTheDocument()
+  })
+
+  it('keeps available-empty Forecast distinct from a valid zero', async () => {
+    const contract=decodeForecastMap(structuredClone(forecastArtifact))
+    contract.forecast.rows=[]
+    contract.forecast.isEmpty=true
+    const user=userEvent.setup()
+    render(<PredictiveHarness forecastLoader={async()=>contract}/>)
+    await user.click(screen.getByRole('button',{name:'Forecast'}))
+    expect(await screen.findByRole('heading',{name:'Forecast available but empty'})).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent('not a zero forecast')
+  })
+
+  it.each([
+    ['forecast-newer','Forecast is newer than Overview.'],
+    ['forecast-older','Overview is newer than the Forecast observation horizon.'],
+    ['overview-older','Overview does not reach the Forecast observation horizon.'],
+  ] as const)('keeps the %s date mismatch explicit', async (kind,copy) => {
+    const contract=decodeForecastMap(structuredClone(forecastArtifact))
+    if(kind==='forecast-newer') contract.dataRange.safeEventEndDate='2026-01-01'
+    if(kind==='forecast-older') contract.dataRange.safeEventEndDate='2025-12-30'
+    if(kind==='overview-older') contract.dataRange.latestObservedWeek='2026-01-05'
+    const user=userEvent.setup()
+    render(<PredictiveHarness forecastLoader={async()=>contract}/>)
+    await user.click(screen.getByRole('button',{name:'Forecast'}))
+    expect(await screen.findByRole('heading',{name:'Overview and Forecast dates do not align'})).toBeInTheDocument()
+    expect(screen.getByRole('status')).toHaveTextContent(copy)
   })
 })

@@ -102,3 +102,17 @@ source week and baseline coverage; overall rather than filter-specific errors;
 no interval; withheld noncanonical geography; and no predictive polygons or
 markers until the complete spatial prerequisite exists. These are explicit UI
 states, not silently filled gaps.
+
+## Phase 7C.3 resolution
+
+The spatial limitation recorded above was accurate for the Phase 7C.2 commit
+`04a06ad` and remains part of that milestone's audit history. Phase 7C.3 now
+resolves it with the reproducibly vendored NYC Department of City Planning / NYC
+Open Data Police Precincts dataset `y76i-bdw7`, edition 26B (May 2026). The
+official geometry reconciles exactly to all 78 Forecast location keys and is
+published through a separately validated browser contract. Forecast and
+Expected change now render verified administrative precinct MultiPolygons while
+retaining the full keyboard-accessible list/detail experience and explicit
+missing, invalid, incomplete, and mismatch states. See
+`reports/phase_7c3_precinct_spatial_rendering.md` for provenance, public-use
+assessment, processing, rendering semantics, safeguards, and verification.

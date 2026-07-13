@@ -261,12 +261,17 @@ Amaç: Model ve analitik çıktılarını operasyonel olarak anlaşılır bir ü
 
 ### Phase 7C — Predictive Map
 
-Durum: Phase 7C.1 — Forecast Map Data Contract ve Phase 7C.2 — Predictive Map
-UI & Integration tamamlandı. Phase 7C tamamlandı. Eksiksiz, doğrulanmış precinct
-geometrisi bulunmadığı için tahmin modları dürüst bir nötr coğrafi canvas ile
-tam klavye erişilebilir precinct liste/detay deneyimini kullanır; ileride gerçek
-polygon/marker çizimi için aggregate-safe, lisanslı ve tüm 78 anahtarı kapsayan
-bir spatial-reference artifact gerekir.
+Durum: Phase 7C.1 — Forecast Map Data Contract ve Phase 7C.2 — Predictive Map UI
+& Integration tamamlandı. Phase 7C.3 — Verified Precinct Spatial Rendering
+uygulaması ve tüm otomatik kontroller tamamlandı; tarayıcı güvenlik katmanının
+engellediği son mobil/state/console pratik doğrulama kapısı bekliyor.
+NYC Department of City Planning / NYC Open Data'nın Mayıs 2026 26B Police
+Precincts kaynağı yeniden üretilebilir biçimde vendor edildi, gerçek Forecast
+sözleşmesindeki 78 `nypd-precinct:<label>` anahtarının tamamıyla bire bir
+doğrulandı ve Forecast ile Expected change modlarında aggregate precinct
+polygonları çizildi. Haritadan bağımsız tam klavye erişilebilir liste/detay yolu
+korundu; eksik, geçersiz veya uyumsuz spatial durumları sıfır ya da boş coğrafya
+olarak gösterilmez.
 
 Amaç: Mevcut haftalık tahminleri coğrafi bağlama taşıyarak kullanıcıya yalnızca
 geçmiş yoğunlaşmaları değil, gelecek hafta için beklenen toplu olay hacmini ve
@@ -291,6 +296,8 @@ Frontend-safe çıktı:
 ```text
 data/processed/dashboard_forecast_map.json
 dashboard/public/data/forecast-map.json
+data/processed/dashboard_precinct_spatial_reference.json
+dashboard/public/data/precinct-spatial-reference.json
 ```
 
 Önerilen tahmin satırı:
@@ -357,6 +364,9 @@ Başarı kriteri:
   kontrollerini testlerle uygulamalıdır.
 - Forecast katmanı masaüstü, tablet, mobil ve klavye kullanımında hotspot
   davranışını bozmamalıdır.
+- Resmî precinct geometrisi tüm 78 tahmin anahtarıyla tam ve benzersiz
+  eşleşmeli; checksum, provenance, CRS, ring yapısı, NYC sınırları ve
+  aggregate-safe alan kısıtları hem build hem tarayıcı sınırında doğrulanmalıdır.
 
 ### Anomalies
 

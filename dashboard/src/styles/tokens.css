@@ -67,6 +67,21 @@
   --map-selected-outline: var(--color-ice-100);
   --map-background: #03090d;
   --map-tile-filter: saturate(0.62) brightness(1.08) contrast(1.08);
+  --map-predictive-boundary: #d1dadd;
+  --map-forecast-volume-zero: #4b5960;
+  --map-forecast-volume-1: #9ac7ce;
+  --map-forecast-volume-2: #68aab5;
+  --map-forecast-volume-3: #388896;
+  --map-forecast-volume-4: #155b69;
+  --map-change-below-1: #6596b5;
+  --map-change-below-2: #397497;
+  --map-change-below-3: #1d536f;
+  --map-change-equal: #818c91;
+  --map-change-above-1: #d1ad70;
+  --map-change-above-2: #b98a4d;
+  --map-change-above-3: #8f6434;
+  --map-change-partial: #bca66f;
+  --map-change-unavailable: #747f85;
 
   --chart-observed: var(--color-cyan-400);
   --chart-secondary: var(--color-cyan-500);

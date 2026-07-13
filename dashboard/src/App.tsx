@@ -31,6 +31,7 @@ import type {
 } from './types/overview'
 import type { MapLoader } from './types/map'
 import type { ForecastMapLoader } from './types/forecastMap'
+import type { PrecinctSpatialReferenceLoader } from './types/precinctSpatialReference'
 import {
   formatDate,
   formatDecimal,
@@ -45,6 +46,7 @@ interface AppProps {
   loader?: OverviewLoader
   mapLoader?: MapLoader
   forecastMapLoader?: ForecastMapLoader
+  precinctSpatialReferenceLoader?: PrecinctSpatialReferenceLoader
 }
 
 type ApplicationView = 'overview' | 'map'
@@ -363,7 +365,7 @@ function ReadyOverview({
   )
 }
 
-export default function App({ loader = loadOverview, mapLoader, forecastMapLoader }: AppProps) {
+export default function App({ loader = loadOverview, mapLoader, forecastMapLoader, precinctSpatialReferenceLoader }: AppProps) {
   const [loadKey, setLoadKey] = useState(0)
   const [state, setState] = useState<LoadState>({ status: 'loading' })
   const [filters, setFilters] = useState<OverviewFilters | null>(null)
@@ -419,6 +421,7 @@ export default function App({ loader = loadOverview, mapLoader, forecastMapLoade
               onReset={() => setFilters(defaultFilters(state.bundle.metadata))}
               mapLoader={mapLoader}
               forecastMapLoader={forecastMapLoader}
+              precinctSpatialReferenceLoader={precinctSpatialReferenceLoader}
             />
           </Suspense>
         )
