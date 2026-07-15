@@ -5,10 +5,14 @@
 The implementation is code-complete. The authoritative source, deterministic
 builder, Python and browser runtime contracts, and Forecast/Expected Change
 polygon rendering are in place, and every required automated verification
-command passes. Practical desktop and tablet checks passed, but the browser
-security layer blocked further localhost interaction during the mobile viewport
-switch. The milestone remains verification-incomplete until the remaining
-practical mobile/state/console checks can be rerun without that policy block.
+command passes. The practical rerun completed desktop, tablet, mobile, state,
+tile-failure, precision, responsive, console, and network checks. The remaining
+blocker is native keyboard activation in the in-app browser: its documented
+keyboard channels focused the correct precinct button and rendered the visible
+focus ring but did not dispatch Enter, Space, or Tab to the page. No alternate
+browser surface, raw CDP, or CLI automation was used. The milestone therefore
+remains verification-incomplete until that final keyboard check succeeds in an
+allowed browser session.
 
 ## Initial repository audit
 
@@ -246,23 +250,42 @@ Expected Change meaning is not encoded by color alone.
 ## Accessibility, responsiveness, and tile resilience
 
 The complete native-button precinct list remains the primary keyboard path and
-retains visible focus, 44-pixel targets, synchronized selection, and complete
-values. The map is a named region with mode-specific accessible labeling and an
-associated textual description; zoom controls have predictive-map names.
-Legends expose scale method, direction, zero, and unavailable-baseline
-semantics in text. Loading, error, neutral, historical, and tile states are
-announced with the existing status patterns.
+retains 44-pixel targets, synchronized mouse selection, complete values, and a
+visible 2-pixel focus outline with 3-pixel offset. The map is a named region
+with mode-specific accessible labeling and an associated textual description;
+zoom controls have predictive-map names. Legends expose scale method,
+direction, zero, and unavailable-baseline semantics in text. Loading, error,
+neutral, historical, and tile states are announced with the existing status
+patterns.
 
 The predictive workspace uses the established desktop/tablet/mobile stacking
 rules, minimum touch targets, overflow protections, and reduced-motion rules.
-At 1280 × 900, the live Forecast map reported 78 features, all 20 visible tiles
-loaded, and the page had no horizontal overflow. At 768 × 1024, it still
-reported 78 features, had no horizontal overflow, and every visible native
-control measured at least 44 pixels high. The browser tool's policy blocked the
-requested 390 × 844 viewport switch; mobile breakpoint, no-page-overflow,
-target-size, map/list/detail, and reduced-motion rules pass in the responsive
-automated suite, but a successful practical mobile rerun remains a release
-check.
+At the 1280 × 900 override, the live Forecast map measured 853 × 586.125 pixels,
+reported 78 features, loaded all 20 visible tiles, had zero page-level
+horizontal overflow, and exposed no visible native control below 44 pixels. At
+768 × 1024, the map measured 693 × 467.25 pixels; the 341.5 × 540 detail and
+list panes sat side by side below it, all 78 rows remained usable, overflow was
+zero, and the minimum visible native-control height was 44 pixels. At the
+390 × 844 override (375 × 844 document client area after the vertical
+scrollbar), the map measured 331 × 460 pixels, followed by a 333 × 420 detail
+and 333 × 500 list. The filter disclosure opened and closed, every visible
+control remained at least 44 pixels high, text remained separated, and page
+horizontal overflow was zero.
+
+The browser advertised viewport and visibility capabilities but no
+reduced-motion emulation. Runtime `matchMedia` therefore remained false; the
+loaded page contained one `prefers-reduced-motion: reduce` rule and the
+responsive Vitest contract verifies its motion removal. No unsupported runtime
+emulation claim is made.
+
+The practical keyboard channel remains the only blocked release check. On a
+real Forecast list, Enter focused the exact Precinct 14 native button and
+computed the expected solid 2-pixel focus ring, but `aria-pressed` remained
+false and the Precinct 75 detail did not change. The documented Playwright,
+DOM-CUA, and CUA Tab/Enter/Space calls all produced the same non-dispatch
+behavior, and the in-app browser could not be made visible. Native-button
+keyboard activation still passes the Vitest integration test; this run does
+not substitute that automated evidence for the missing practical activation.
 
 CARTO raster tiles are an optional backdrop. A tile failure produces a visible
 notice but does not remove official vector polygons, filters, legends, the
@@ -371,24 +394,50 @@ scale/render tests, and 32 Map workspace tests for spatial failures, Forecast
 states, list/polygon/detail synchronization, keyboard selection, legends,
 baseline states, date mismatches, responsive rules, and tile failure.
 
-Practical browser checks with real artifacts passed for Overview and the
-396-row Hotspots regression, Forecast and Expected Change with all 78 precincts,
-textual legends, list/detail selection and visible focus, categorical filters,
-Reset, a valid-zero fixture, a partial-baseline fixture, the unsupported
-historical-date state, loaded raster tiles, desktop/tablet overflow, and 44-pixel
-controls. The temporary Vite server was stopped.
+Practical browser verification used the real rendered application and semantic
+locators. Overview rendered five metric cards and four chart SVGs with no
+loading/error state or page overflow. Hotspots loaded all 396 real rows, its
+360-grid/36-precinct layer counts, vector canvas, 20/20 visible raster tiles,
+layer controls, list, and detail. Mouse list selection updated the Hotspot
+detail.
 
-The small-positive formatting, explicit spatial-stale gate, and zero-area ring
-hardening were added after the browser policy block. Their real-artifact and
-state coverage passes in Vitest/Python, but they were not re-opened in the live
-browser during this run.
+Forecast rendered exactly 78 polygons and 78 list rows at the default scope;
+BRONX rendered exactly 12 of each. A direct canvas-polygon click changed the
+shared polygon/list/detail selection to Precinct 48. Borough, precinct, offense,
+and law filters all operated; Reset restored 78, and a MANHATTAN/ABORTION scope
+showed an explicit zero-result message, zero polygons, and “No precinct
+selected,” not a zero forecast.
 
-Still pending before milestone completion is a practical rerun of the checks
-the browser policy prevented or cut short: the 390 × 844 mobile viewport,
-direct canvas-polygon selection, synthetic missing/invalid/incomplete spatial
-contracts, forced tile failure, runtime reduced-motion emulation, and the final
-console warning/error review. These behaviors pass their automated tests; they
-are not claimed as completed practical checks.
+The BRONX / Precinct 40 / AGRICULTURE & MRKTS LAW-UNCLASSIFIED /
+MISDEMEANOR fixture displayed a valid `0.0`, “approximately equal,” and “Not
+defined for a zero baseline.” The BROOKLYN / Precinct 66 / UNLAWFUL POSS. WEAP.
+ON SCHOOL / VIOLATION fixture displayed `0.00102` and `+0.00102`; its Forecast
+legend used distinct `0.000255`, `0.00051`, and `0.000765` boundaries rather
+than repeated zero labels. Precinct 1 showed a real 72/73 partial baseline at
+the aggregate scope and a 0/1 missing baseline for CHILD ABANDONMENT/NON
+SUPPORT 1 / FELONY. Both withheld change and used distinct long-dash/short-dash
+polygon rendering plus explicit partial/missing text.
+
+The end week `2025-12-15` withheld the fixed future forecast. A temporary
+development-only harness also verified Forecast-newer and Overview-newer
+mismatch copy, then was removed. The same removed harness exercised missing,
+network, malformed, invalid, incomplete coverage, location-key mismatch,
+stale, unsupported-version, and incompatible-identity spatial states. Every
+state withheld polygons while preserving all 78 list rows and detail values.
+
+A forced 20/20 raster-tile failure produced the visible tile notice while all
+78 vector polygons, filters, legend, list, and detail remained usable. A fresh
+post-harness tab then loaded all five required data artifacts and 20/20 CARTO
+tiles, showed zero horizontal overflow, and produced no console warnings or
+errors, including no React key/state-update, Leaflet, or accessibility warning.
+The state and tile harnesses were removed before final verification, and the
+temporary Vite server was stopped.
+
+Still pending before milestone completion is one successful practical native
+keyboard activation through an allowed in-app browser session. The current
+browser focused the correct button and rendered visible focus but did not
+deliver Tab/Enter/Space activation; policy was not bypassed through another
+surface.
 
 ## Artifact and production bundle impact
 
@@ -434,8 +483,10 @@ These figures are from the final successful production rebuild.
 - Administrative polygons communicate aggregate precinct membership only; they
   do not locate a future event or indicate risk, danger, patrol priority, or
   enforcement need.
-- A successful practical browser rerun of the policy-blocked mobile/state/
-  resilience/console matrix remains before the milestone can be marked complete.
+- A successful practical native-button Enter/Space activation in an allowed
+  browser session remains before the milestone can be marked complete. The
+  current in-app browser focused the target and showed visible focus but did
+  not dispatch the activation event; no alternate surface was used.
 
 No model, API, authentication, deployment, real-time inference, event-level
 geography, commit, or push is part of this work.

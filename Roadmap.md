@@ -263,8 +263,13 @@ Amaç: Model ve analitik çıktılarını operasyonel olarak anlaşılır bir ü
 
 Durum: Phase 7C.1 — Forecast Map Data Contract ve Phase 7C.2 — Predictive Map UI
 & Integration tamamlandı. Phase 7C.3 — Verified Precinct Spatial Rendering
-uygulaması ve tüm otomatik kontroller tamamlandı; tarayıcı güvenlik katmanının
-engellediği son mobil/state/console pratik doğrulama kapısı bekliyor.
+uygulaması ve tüm otomatik kontroller tamamlandı. 1280 × 900, 768 × 1024 ve
+390 × 844 pratik responsive kontrolleri; spatial hata/stale/mismatch durumları,
+tile-failure dayanıklılığı ve temiz console/network kontrolleri geçti. Ancak
+in-app tarayıcının belgelenmiş klavye kanalları native liste düğmesini doğru
+odaklayıp görünür focus ring'i gösterdiği halde Enter/Space aktivasyon olayını
+sayfaya iletmedi. Başka bir tarayıcı yüzeyiyle policy aşılmadı; bu son pratik
+klavye kapısı başarıyla tekrar edilene kadar Phase 7C.3 verification-incomplete.
 NYC Department of City Planning / NYC Open Data'nın Mayıs 2026 26B Police
 Precincts kaynağı yeniden üretilebilir biçimde vendor edildi, gerçek Forecast
 sözleşmesindeki 78 `nypd-precinct:<label>` anahtarının tamamıyla bire bir

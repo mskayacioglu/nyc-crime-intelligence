@@ -314,17 +314,35 @@ The final build reports 229.04 / 64.78 kB for lazy Map JavaScript, 226.25 /
 Compared with Phase 7C.2, lazy Map JavaScript adds 40.57 / 10.32 kB while main
 and Overview remain effectively unchanged.
 
-Practical browser checks passed for the real Overview and 396-row Hotspots
-regressions, Forecast and Expected change with all 78 precincts, categorical
-filters, Reset, valid zero, partial baseline, the historical state, visible
-focus, 20 loaded tiles, desktop/tablet overflow, and 44-pixel controls. The
-browser security layer blocked further localhost interaction during the
-390 × 844 switch. Mobile/state/tile-failure/reduced-motion/console behavior is
-covered by automated tests but still needs a successful practical rerun before
-the Phase 7C.3 verification gate can be called complete. The temporary server
-was stopped. The later small-positive formatting, spatial-stale, and zero-area
-ring hardening passes automated coverage but was not re-opened in that blocked
-browser session.
+Practical browser checks passed for the real Overview (five metric cards and
+four chart SVGs), the 396-row Hotspots regression with 360 grid/36 precinct
+layers, and Forecast/Expected change with all 78 precincts and exactly 12 under
+BRONX. Direct polygon selection synchronized the polygon, list, and detail.
+All categorical filters, Reset, an explicit empty-filter result, the valid-zero
+fixture, the real `0.00102` fixture, Precinct 1 partial and missing baselines,
+the historical state, and both older/newer date mismatches were exercised.
+
+Missing, network, malformed, invalid, incomplete, key-mismatch, stale,
+unsupported-version, and incompatible-identity spatial states all withheld
+polygons while preserving the full 78-row list/detail path. A forced 20/20 tile
+failure left all 78 vector polygons, filters, legend, list, and detail usable
+and showed the expected notice. A fresh post-harness tab loaded all five data
+artifacts and 20/20 CARTO tiles with no console warnings/errors. The temporary
+harness was removed and the server was stopped.
+
+At 1280 × 900, 768 × 1024, and 390 × 844 there was zero page horizontal
+overflow, the map and stacked panes fit their layouts, and no visible native
+control measured below 44 pixels. Mobile filters opened and closed normally.
+The browser exposed no reduced-motion emulation; one loaded reduced-motion rule
+and its Vitest contract were confirmed without claiming runtime emulation.
+
+Phase 7C.3 remains verification-incomplete for one practical browser check.
+The in-app browser focused the exact native precinct button and rendered the
+visible 2-pixel focus ring, but its documented Tab/Enter/Space channels did not
+dispatch activation, so the selected detail did not change. The native-button
+keyboard test passes in Vitest, but policy was not bypassed through another
+browser surface. A successful allowed practical keyboard activation is the
+exact remaining gate.
 
 ## Map contract and filter semantics
 
