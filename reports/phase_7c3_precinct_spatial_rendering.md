@@ -7,12 +7,21 @@ builder, Python and browser runtime contracts, and Forecast/Expected Change
 polygon rendering are in place, and every required automated verification
 command passes. The practical rerun completed desktop, tablet, mobile, state,
 tile-failure, precision, responsive, console, and network checks. The remaining
-blocker is native keyboard activation in the in-app browser: its documented
-keyboard channels focused the correct precinct button and rendered the visible
-focus ring but did not dispatch Enter, Space, or Tab to the page. No alternate
-browser surface, raw CDP, or CLI automation was used. The milestone therefore
-remains verification-incomplete until that final keyboard check succeeds in an
-allowed browser session.
+blocker is native keyboard activation in the in-app browser. In a fresh
+1280 x 900 session, Forecast started on Precinct 75 with exactly 78 polygons
+and 78 native list buttons. The semantic Playwright key channel focused
+Precinct 14 for Enter and Precinct 40 for Space and rendered the expected
+2-pixel outline with 3-pixel offset, but both buttons remained
+`aria-pressed="false"`; the pressed list row and detail remained Precinct 75.
+CUA and DOM-CUA Enter/Space produced the same non-dispatch result. Tab and
+Shift+Tab also left focus on the Forecast mode button, and the advertised
+visibility capability did not present a visible webview. Expected Change
+repeated the same focused-but-not-activated result on Precinct 14 while its
+Precinct 75 detail and textual below-baseline semantics remained unchanged. No
+alternate browser surface, raw CDP, CLI automation, synthetic state mutation,
+or direct event dispatch was used. The milestone therefore remains
+verification-incomplete until that final keyboard check succeeds in an allowed
+browser session.
 
 ## Initial repository audit
 
@@ -278,14 +287,22 @@ loaded page contained one `prefers-reduced-motion: reduce` rule and the
 responsive Vitest contract verifies its motion removal. No unsupported runtime
 emulation claim is made.
 
-The practical keyboard channel remains the only blocked release check. On a
-real Forecast list, Enter focused the exact Precinct 14 native button and
-computed the expected solid 2-pixel focus ring, but `aria-pressed` remained
-false and the Precinct 75 detail did not change. The documented Playwright,
-DOM-CUA, and CUA Tab/Enter/Space calls all produced the same non-dispatch
-behavior, and the in-app browser could not be made visible. Native-button
-keyboard activation still passes the Vitest integration test; this run does
-not substitute that automated evidence for the missing practical activation.
+The practical keyboard channel remains the only blocked release check. At
+1280 x 900, the exact native Forecast button named `Select precinct 14,
+232.6625 expected aggregate reported events` received semantic Playwright
+Enter focus, and `Select precinct 40, 216.2125 expected aggregate reported
+events` received semantic Playwright Space focus. Each displayed the solid
+2-pixel focus outline with 3-pixel offset, but each remained
+`aria-pressed="false"`; the selected row, Precinct 75 detail, and shared polygon
+selection did not change. CUA and DOM-CUA Enter/Space also left Precinct 75
+selected. Semantic Playwright and CUA Tab/Shift+Tab attempts from the focused
+Forecast mode button did not advance focus. Expected Change likewise focused
+the exact native `Select precinct 14, below baseline, -23.0875` button on
+Enter, but retained the selected `Select precinct 75, below baseline,
+-23.0375` row and Precinct 75 detail. The in-app browser's supported visibility
+request still reported false. Native-button keyboard activation continues to
+pass the Vitest integration test; this run does not substitute that automated
+evidence for the missing practical activation.
 
 CARTO raster tiles are an optional backdrop. A tile failure produces a visible
 notice but does not remove official vector polygons, filters, legends, the
@@ -434,10 +451,12 @@ The state and tile harnesses were removed before final verification, and the
 temporary Vite server was stopped.
 
 Still pending before milestone completion is one successful practical native
-keyboard activation through an allowed in-app browser session. The current
-browser focused the correct button and rendered visible focus but did not
-deliver Tab/Enter/Space activation; policy was not bypassed through another
-surface.
+keyboard activation through an allowed in-app browser session. At 1280 x 900,
+the current browser focused Precinct 14 for Enter and Precinct 40 for Space but
+left `aria-pressed`, the Precinct 75 detail, and shared polygon selection
+unchanged. Expected Change repeated the Precinct 14 Enter attempt with the same
+result. The Playwright, CUA, and DOM-CUA key channels were tried; policy was not
+bypassed through another surface.
 
 ## Artifact and production bundle impact
 
@@ -484,9 +503,10 @@ These figures are from the final successful production rebuild.
   do not locate a future event or indicate risk, danger, patrol priority, or
   enforcement need.
 - A successful practical native-button Enter/Space activation in an allowed
-  browser session remains before the milestone can be marked complete. The
-  current in-app browser focused the target and showed visible focus but did
-  not dispatch the activation event; no alternate surface was used.
+  browser session remains before the milestone can be marked complete. At
+  1280 x 900, the current in-app browser focused the exact Precinct 14 and
+  Precinct 40 targets and showed visible focus, but Playwright, CUA, and DOM-CUA
+  did not dispatch activation; no alternate surface was used.
 
 No model, API, authentication, deployment, real-time inference, event-level
 geography, commit, or push is part of this work.
