@@ -96,15 +96,18 @@ class DashboardOverviewContractTest(unittest.TestCase):
                 actual_crime_count BIGINT,
                 expected_count DOUBLE,
                 expected_count_source VARCHAR,
+                expected_historical_count DOUBLE,
+                expected_ml_count DOUBLE,
                 residual_count DOUBLE,
                 is_anomaly BOOLEAN,
+                passes_volume_filter BOOLEAN,
                 anomaly_severity VARCHAR,
                 anomaly_score DOUBLE
             )
             """
         )
         con.executemany(
-            "INSERT INTO anomaly_input VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            "INSERT INTO anomaly_input VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
             [
                 (
                     date(2024, 1, 8),
@@ -115,7 +118,10 @@ class DashboardOverviewContractTest(unittest.TestCase):
                     5,
                     2.0,
                     "rolling_13_week_mean",
+                    2.0,
+                    None,
                     3.0,
+                    True,
                     True,
                     "high",
                     4.2,
@@ -130,6 +136,9 @@ class DashboardOverviewContractTest(unittest.TestCase):
                     1.0,
                     "rolling_13_week_mean",
                     1.0,
+                    None,
+                    1.0,
+                    True,
                     True,
                     "low",
                     1.1,
@@ -248,7 +257,36 @@ class DashboardOverviewContractTest(unittest.TestCase):
             "(FORMAT PARQUET)"
         )
         paths["anomaly_metrics"].write_text(
-            json.dumps({"phase": "Phase 6A", "generated_at_utc": "2024-01-14T00:00:00Z"})
+            json.dumps(
+                {
+                    "phase": "Phase 6A - Anomaly Detection Layer",
+                    "generated_at_utc": "2024-01-14T00:00:00Z",
+                    "anomaly_columns_used": build_dashboard_overview.WEEKLY_REQUIRED_COLUMNS,
+                    "output_columns": build_dashboard_overview.ANOMALY_REQUIRED_COLUMNS,
+                    "anomaly_config": {
+                        "primary_historical_expected_count": (
+                            "trailing_13_week_mean over prior weeks only"
+                        )
+                    },
+                    "analysis_window": {
+                        "min_week_start": "2024-01-01",
+                        "max_week_start": "2024-01-08",
+                        "scoring_end_week": "2024-01-08",
+                        "latest_week_excluded_from_scoring": False,
+                    },
+                    "record_counts": {"anomaly_rows": 2},
+                    "severity_counts": [
+                        {"anomaly_severity": "low", "anomaly_count": 1},
+                        {"anomaly_severity": "medium", "anomaly_count": 0},
+                        {"anomaly_severity": "high", "anomaly_count": 1},
+                        {"anomaly_severity": "critical", "anomaly_count": 0},
+                    ],
+                    "leakage_controls": {
+                        "historical_windows_use_prior_weeks_only": True,
+                        "random_splits_used": False,
+                    },
+                }
+            )
         )
         paths["hotspot_metrics"].write_text(
             json.dumps({"phase": "Phase 6B", "generated_at_utc": "2024-01-14T00:00:00Z"})
@@ -329,6 +367,30 @@ class DashboardOverviewContractTest(unittest.TestCase):
             threads=1,
         )
         return payload, overview, cube
+
+    def mutate_anomalies(
+        self, source: Path, target: Path, statements: list[str]
+    ) -> Path:
+        duckdb = build_dashboard_overview.require_duckdb()
+        con = duckdb.connect(database=":memory:")
+        con.execute(
+            f"CREATE TABLE anomaly_mutation AS SELECT * FROM read_parquet("
+            f"{build_dashboard_overview.sql_string(source)})"
+        )
+        for statement in statements:
+            con.execute(statement)
+        con.execute(
+            f"COPY anomaly_mutation TO "
+            f"{build_dashboard_overview.sql_string(target)} (FORMAT PARQUET)"
+        )
+        con.close()
+        return target
+
+    def mutate_anomaly_metrics(self, source: Path, target: Path, mutate) -> Path:
+        payload = json.loads(source.read_text(encoding="utf-8"))
+        mutate(payload)
+        target.write_text(json.dumps(payload), encoding="utf-8")
+        return target
 
     def test_overview_schema_binary_layout_and_week_offsets(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -436,6 +498,283 @@ class DashboardOverviewContractTest(unittest.TestCase):
         self.assertEqual(error["rmse"], 1.25)
         self.assertEqual(error["weightedMae"], 2.5)
         self.assertTrue(payload["signals"]["forecast"]["summary"]["limitations"])
+
+    def test_anomaly_contract_preserves_zero_expectation_and_available_empty(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = self.write_inputs(root / "inputs")
+            zero_anomaly = self.mutate_anomalies(
+                paths["anomalies"],
+                root / "zero-anomaly.parquet",
+                [
+                    "UPDATE anomaly_mutation SET expected_count = 0, "
+                    "expected_historical_count = 0, residual_count = actual_crime_count "
+                    "WHERE anomaly_severity = 'high'"
+                ],
+            )
+            payload, _, _ = self.build(
+                paths, root / "zero-output", anomalies=zero_anomaly
+            )
+            signal = payload["signals"]["anomalies"]
+            self.assertEqual(signal["status"], "available")
+            expected_index = signal["rowColumns"].index("expectedCount")
+            residual_index = signal["rowColumns"].index("residualCount")
+            self.assertEqual(signal["rows"][0][expected_index], 0)
+            self.assertEqual(signal["rows"][0][residual_index], 5)
+
+            empty_anomaly = self.mutate_anomalies(
+                paths["anomalies"],
+                root / "empty-anomaly.parquet",
+                ["DELETE FROM anomaly_mutation"],
+            )
+
+            def zero_counts(metrics):
+                metrics["record_counts"]["anomaly_rows"] = 0
+                for row in metrics["severity_counts"]:
+                    row["anomaly_count"] = 0
+
+            empty_metrics = self.mutate_anomaly_metrics(
+                paths["anomaly_metrics"], root / "empty-metrics.json", zero_counts
+            )
+            payload, _, _ = self.build(
+                paths,
+                root / "empty-output",
+                anomalies=empty_anomaly,
+                anomaly_metrics=empty_metrics,
+            )
+            signal = payload["signals"]["anomalies"]
+            self.assertEqual(signal["status"], "available")
+            self.assertEqual(signal["rows"], [])
+            self.assertEqual(signal["summary"]["rowCount"], 0)
+            self.assertTrue(signal["summary"]["isEmpty"])
+            self.assertEqual(signal["summary"]["scoringEndWeek"], "2024-01-08")
+
+    def test_anomaly_contract_rejects_duplicate_arithmetic_source_and_flags(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = self.write_inputs(root / "inputs")
+            cases = [
+                (
+                    "duplicate",
+                    [
+                        "INSERT INTO anomaly_mutation SELECT * FROM anomaly_mutation "
+                        "WHERE anomaly_severity = 'high'"
+                    ],
+                    "Duplicate anomaly",
+                ),
+                (
+                    "arithmetic",
+                    [
+                        "UPDATE anomaly_mutation SET residual_count = residual_count + 1 "
+                        "WHERE anomaly_severity = 'high'"
+                    ],
+                    "arithmetic",
+                ),
+                (
+                    "source",
+                    [
+                        "UPDATE anomaly_mutation SET expected_count_source = 'ml_prediction' "
+                        "WHERE anomaly_severity = 'high'"
+                    ],
+                    "ML anomaly reference",
+                ),
+                (
+                    "flag",
+                    [
+                        "UPDATE anomaly_mutation SET passes_volume_filter = false "
+                        "WHERE anomaly_severity = 'high'"
+                    ],
+                    "flags",
+                ),
+            ]
+            for name, statements, reason in cases:
+                with self.subTest(name=name):
+                    anomaly_path = self.mutate_anomalies(
+                        paths["anomalies"], root / f"{name}.parquet", statements
+                    )
+                    payload, _, _ = self.build(
+                        paths, root / f"{name}-output", anomalies=anomaly_path
+                    )
+                    signal = payload["signals"]["anomalies"]
+                    self.assertEqual(signal["status"], "invalid")
+                    self.assertEqual(signal["rows"], [])
+                    self.assertIn(reason, signal["reason"])
+                    self.assertIsNone(signal["summary"]["rowCount"])
+                    self.assertFalse(signal["summary"]["isEmpty"])
+
+    def test_anomaly_contract_rejects_malformed_type_dimension_date_and_severity(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = self.write_inputs(root / "inputs")
+            cases = [
+                (
+                    "blank-dimension",
+                    [
+                        "UPDATE anomaly_mutation SET borough = '' "
+                        "WHERE anomaly_severity = 'high'"
+                    ],
+                    "dimensions",
+                ),
+                (
+                    "non-monday",
+                    [
+                        "UPDATE anomaly_mutation SET week_start = DATE '2024-01-09' "
+                        "WHERE anomaly_severity = 'high'"
+                    ],
+                    "Mondays",
+                ),
+                (
+                    "unsupported-severity",
+                    [
+                        "UPDATE anomaly_mutation SET anomaly_severity = 'urgent' "
+                        "WHERE anomaly_severity = 'high'"
+                    ],
+                    "severity",
+                ),
+                (
+                    "null-source",
+                    [
+                        "UPDATE anomaly_mutation SET expected_count_source = NULL "
+                        "WHERE anomaly_severity = 'low'"
+                    ],
+                    "source",
+                ),
+                (
+                    "null-severity",
+                    [
+                        "UPDATE anomaly_mutation SET anomaly_severity = NULL "
+                        "WHERE anomaly_severity = 'low'"
+                    ],
+                    "severity",
+                ),
+            ]
+            for name, statements, reason in cases:
+                with self.subTest(name=name):
+                    anomaly_path = self.mutate_anomalies(
+                        paths["anomalies"], root / f"{name}.parquet", statements
+                    )
+                    payload, _, _ = self.build(
+                        paths, root / f"{name}-output", anomalies=anomaly_path
+                    )
+                    signal = payload["signals"]["anomalies"]
+                    self.assertEqual(signal["status"], "invalid")
+                    self.assertIn(reason, signal["reason"])
+
+            duckdb = build_dashboard_overview.require_duckdb()
+            con = duckdb.connect(database=":memory:")
+            wrong_type = root / "wrong-type.parquet"
+            con.execute(
+                f"COPY (SELECT * REPLACE (CAST(actual_crime_count AS DOUBLE) "
+                f"AS actual_crime_count) FROM read_parquet("
+                f"{build_dashboard_overview.sql_string(paths['anomalies'])})) TO "
+                f"{build_dashboard_overview.sql_string(wrong_type)} (FORMAT PARQUET)"
+            )
+            con.close()
+            payload, _, _ = self.build(
+                paths, root / "wrong-type-output", anomalies=wrong_type
+            )
+            self.assertEqual(payload["signals"]["anomalies"]["status"], "invalid")
+            self.assertIn("must be an integer", payload["signals"]["anomalies"]["reason"])
+
+    def test_anomaly_metrics_fail_closed_for_missing_malformed_counts_and_identity(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = self.write_inputs(root / "inputs")
+            missing = root / "missing-metrics.json"
+            payload, _, _ = self.build(
+                paths, root / "missing-output", anomaly_metrics=missing
+            )
+            self.assertEqual(payload["signals"]["anomalies"]["status"], "missing")
+            self.assertIn("artifact is missing", payload["signals"]["anomalies"]["reason"])
+
+            malformed = root / "malformed-metrics.json"
+            malformed.write_text("[", encoding="utf-8")
+            payload, _, _ = self.build(
+                paths, root / "malformed-output", anomaly_metrics=malformed
+            )
+            self.assertEqual(payload["signals"]["anomalies"]["status"], "invalid")
+
+            def wrong_count(metrics):
+                metrics["record_counts"]["anomaly_rows"] = 99
+
+            count_metrics = self.mutate_anomaly_metrics(
+                paths["anomaly_metrics"], root / "count-metrics.json", wrong_count
+            )
+            payload, _, _ = self.build(
+                paths, root / "count-output", anomaly_metrics=count_metrics
+            )
+            self.assertEqual(payload["signals"]["anomalies"]["status"], "invalid")
+            self.assertIn("row count", payload["signals"]["anomalies"]["reason"])
+
+            def wrong_identity(metrics):
+                metrics["phase"] = "Phase 6B"
+
+            identity_metrics = self.mutate_anomaly_metrics(
+                paths["anomaly_metrics"],
+                root / "identity-metrics.json",
+                wrong_identity,
+            )
+            payload, _, _ = self.build(
+                paths, root / "identity-output", anomaly_metrics=identity_metrics
+            )
+            self.assertEqual(
+                payload["signals"]["anomalies"]["status"], "incompatible"
+            )
+
+    def test_anomaly_metrics_distinguish_stale_and_incompatible_horizons(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = self.write_inputs(root / "inputs")
+            empty_anomaly = self.mutate_anomalies(
+                paths["anomalies"],
+                root / "empty-anomaly.parquet",
+                ["DELETE FROM anomaly_mutation"],
+            )
+
+            def empty_counts(metrics):
+                metrics["record_counts"]["anomaly_rows"] = 0
+                for row in metrics["severity_counts"]:
+                    row["anomaly_count"] = 0
+
+            def stale_metrics(metrics):
+                empty_counts(metrics)
+                metrics["analysis_window"]["scoring_end_week"] = "2024-01-01"
+                metrics["analysis_window"]["latest_week_excluded_from_scoring"] = True
+
+            stale = self.mutate_anomaly_metrics(
+                paths["anomaly_metrics"], root / "stale-metrics.json", stale_metrics
+            )
+            payload, _, _ = self.build(
+                paths,
+                root / "stale-output",
+                anomalies=empty_anomaly,
+                anomaly_metrics=stale,
+            )
+            signal = payload["signals"]["anomalies"]
+            self.assertEqual(signal["status"], "stale")
+            self.assertEqual(signal["rows"], [])
+            self.assertEqual(signal["summary"]["scoringEndWeek"], "2024-01-01")
+            self.assertIsNone(signal["summary"]["rowCount"])
+
+            def future_metrics(metrics):
+                empty_counts(metrics)
+                metrics["analysis_window"]["max_week_start"] = "2024-01-15"
+                metrics["analysis_window"]["scoring_end_week"] = "2024-01-15"
+                metrics["analysis_window"]["latest_week_excluded_from_scoring"] = False
+
+            future = self.mutate_anomaly_metrics(
+                paths["anomaly_metrics"], root / "future-metrics.json", future_metrics
+            )
+            payload, _, _ = self.build(
+                paths,
+                root / "future-output",
+                anomalies=empty_anomaly,
+                anomaly_metrics=future,
+            )
+            signal = payload["signals"]["anomalies"]
+            self.assertEqual(signal["status"], "incompatible")
+            self.assertEqual(signal["rows"], [])
+            self.assertIsNone(signal["summary"]["rowCount"])
 
     def test_each_missing_optional_input_degrades_gracefully(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

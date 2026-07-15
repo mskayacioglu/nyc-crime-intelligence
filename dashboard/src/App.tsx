@@ -41,6 +41,7 @@ import {
 
 const OverviewCharts = lazy(() => import('./components/OverviewCharts'))
 const MapView = lazy(() => import('./components/MapView'))
+const AnomaliesView = lazy(() => import('./components/AnomaliesView'))
 
 interface AppProps {
   loader?: OverviewLoader
@@ -49,7 +50,7 @@ interface AppProps {
   precinctSpatialReferenceLoader?: PrecinctSpatialReferenceLoader
 }
 
-type ApplicationView = 'overview' | 'map'
+type ApplicationView = 'overview' | 'map' | 'anomalies'
 
 type LoadState =
   | { status: 'loading' }
@@ -83,6 +84,15 @@ function AppNavigation({
         <MapIcon aria-hidden="true" size={15} />
         Map &amp; hotspots
       </button>
+      <button
+        type="button"
+        className="view-navigation__item"
+        aria-current={view === 'anomalies' ? 'page' : undefined}
+        onClick={() => onView('anomalies')}
+      >
+        <AlertTriangle aria-hidden="true" size={15} />
+        Anomalies
+      </button>
       <span className="responsible-boundary">
         <ShieldAlert aria-hidden="true" size={14} />
         Area-level patterns only · not individual risk or enforcement guidance
@@ -104,6 +114,27 @@ function MapModuleLoading() {
       <div className="skeleton-block map-module-loading" aria-hidden="true" />
     </main>
   )
+}
+
+function AnomaliesModuleLoading() {
+  return (
+    <main id="main-content" className="main-content" aria-busy="true">
+      <div className="state-banner" role="status">
+        <AlertTriangle aria-hidden="true" size={18} />
+        <div>
+          <strong>Opening anomalies</strong>
+          <span>Preparing observed aggregate signals.</span>
+        </div>
+      </div>
+      <div className="skeleton-block anomalies-module-loading" aria-hidden="true" />
+    </main>
+  )
+}
+
+function skipLinkLabel(view: ApplicationView): string {
+  if (view === 'overview') return 'Overview'
+  if (view === 'map') return 'Map and hotspots'
+  return 'Anomalies'
 }
 
 function AppHeader({
@@ -396,7 +427,7 @@ export default function App({ loader = loadOverview, mapLoader, forecastMapLoade
   return (
     <div className="app-shell">
       <a className="skip-link" href="#main-content">
-        Skip to {view === 'overview' ? 'Overview' : 'Map and hotspots'}
+        Skip to {skipLinkLabel(view)}
       </a>
       <AppHeader metadata={metadata} state={state.status} onReload={reload} />
       <AppNavigation view={view} onView={setView} />
@@ -412,7 +443,7 @@ export default function App({ loader = loadOverview, mapLoader, forecastMapLoade
             onFilters={setFilters}
             onReset={() => setFilters(defaultFilters(state.bundle.metadata))}
           />
-        ) : (
+        ) : view === 'map' ? (
           <Suspense fallback={<MapModuleLoading />}>
             <MapView
               metadata={state.bundle.metadata}
@@ -422,6 +453,15 @@ export default function App({ loader = loadOverview, mapLoader, forecastMapLoade
               mapLoader={mapLoader}
               forecastMapLoader={forecastMapLoader}
               precinctSpatialReferenceLoader={precinctSpatialReferenceLoader}
+            />
+          </Suspense>
+        ) : (
+          <Suspense fallback={<AnomaliesModuleLoading />}>
+            <AnomaliesView
+              metadata={state.bundle.metadata}
+              filters={filters}
+              onFilters={setFilters}
+              onReset={() => setFilters(defaultFilters(state.bundle.metadata))}
             />
           </Suspense>
         )

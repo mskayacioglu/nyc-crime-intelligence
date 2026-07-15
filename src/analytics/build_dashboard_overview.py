@@ -74,11 +74,19 @@ ANOMALY_REQUIRED_COLUMNS = [
     "actual_crime_count",
     "expected_count",
     "expected_count_source",
+    "expected_historical_count",
+    "expected_ml_count",
     "residual_count",
     "is_anomaly",
+    "passes_volume_filter",
     "anomaly_severity",
     "anomaly_score",
 ]
+ANOMALY_SEVERITIES = ["low", "medium", "high", "critical"]
+ANOMALY_STATUSES = {"available", "missing", "invalid", "stale", "incompatible"}
+ANOMALY_METRICS_PHASE = "Phase 6A - Anomaly Detection Layer"
+ANOMALY_HISTORICAL_METHOD = "trailing_13_week_mean over prior weeks only"
+ANOMALY_ARITHMETIC_TOLERANCE = 0.000001
 HOTSPOT_REQUIRED_COLUMNS = [
     "hotspot_grain",
     "borough",
@@ -294,6 +302,15 @@ def parquet_columns(con: Any, path: Path) -> set[str]:
     }
 
 
+def parquet_column_types(con: Any, path: Path) -> dict[str, str]:
+    return {
+        str(row[0]): str(row[1]).upper()
+        for row in con.execute(
+            f"DESCRIBE SELECT * FROM read_parquet({sql_string(path)})"
+        ).fetchall()
+    }
+
+
 def require_parquet_columns(
     con: Any, path: Path, required: list[str], label: str
 ) -> None:
@@ -325,6 +342,201 @@ def _missing_optional(path: Path) -> dict[str, Any]:
     return {"status": "missing", "sourceFile": path.name, "records": []}
 
 
+def _require_anomaly_parquet_types(con: Any, path: Path) -> None:
+    types = parquet_column_types(con, path)
+    required_exact = {
+        "week_start": "DATE",
+        "borough": "VARCHAR",
+        "precinct": "VARCHAR",
+        "offense_type": "VARCHAR",
+        "law_category": "VARCHAR",
+        "expected_count_source": "VARCHAR",
+        "is_anomaly": "BOOLEAN",
+        "passes_volume_filter": "BOOLEAN",
+        "anomaly_severity": "VARCHAR",
+    }
+    for column, expected_type in required_exact.items():
+        if types.get(column) != expected_type:
+            raise OptionalContractError(
+                f"Anomaly column {column} must be {expected_type}."
+            )
+    if not types.get("actual_crime_count", "").startswith(
+        (
+            "TINYINT",
+            "SMALLINT",
+            "INTEGER",
+            "BIGINT",
+            "HUGEINT",
+            "UTINYINT",
+            "USMALLINT",
+            "UINTEGER",
+            "UBIGINT",
+        )
+    ):
+        raise OptionalContractError(
+            "Anomaly column actual_crime_count must be an integer."
+        )
+    numeric_prefixes = (
+        "TINYINT",
+        "SMALLINT",
+        "INTEGER",
+        "BIGINT",
+        "HUGEINT",
+        "UTINYINT",
+        "USMALLINT",
+        "UINTEGER",
+        "UBIGINT",
+        "FLOAT",
+        "DOUBLE",
+        "DECIMAL",
+    )
+    for column in (
+        "expected_count",
+        "expected_historical_count",
+        "expected_ml_count",
+        "residual_count",
+        "anomaly_score",
+    ):
+        if not types.get(column, "").startswith(numeric_prefixes):
+            raise OptionalContractError(f"Anomaly column {column} must be numeric.")
+
+
+def _validate_anomaly_source(con: Any, path: Path) -> dict[str, Any]:
+    stats = fetch_dicts(
+        con,
+        f"""
+        SELECT
+            COUNT(*)::BIGINT AS source_row_count,
+            COUNT(DISTINCT (
+                week_start, borough, precinct, offense_type, law_category
+            ))::BIGINT AS distinct_logical_key_count,
+            MIN(week_start) AS min_week,
+            MAX(week_start) AS max_week,
+            COUNT(*) FILTER (
+                WHERE week_start IS NULL OR dayofweek(week_start) != 1
+            )::BIGINT AS invalid_week_rows,
+            COUNT(*) FILTER (
+                WHERE borough IS NULL OR trim(borough) = ''
+                   OR precinct IS NULL OR trim(precinct) = ''
+                   OR offense_type IS NULL OR trim(offense_type) = ''
+                   OR law_category IS NULL OR trim(law_category) = ''
+            )::BIGINT AS invalid_dimension_rows,
+            COUNT(*) FILTER (
+                WHERE actual_crime_count IS NULL OR actual_crime_count < 0
+            )::BIGINT AS invalid_actual_rows,
+            COUNT(*) FILTER (
+                WHERE expected_count IS NULL OR NOT isfinite(expected_count)
+                   OR expected_count < 0
+                   OR expected_historical_count IS NOT NULL
+                      AND (NOT isfinite(expected_historical_count)
+                           OR expected_historical_count < 0)
+                   OR expected_ml_count IS NOT NULL
+                      AND (NOT isfinite(expected_ml_count) OR expected_ml_count < 0)
+            )::BIGINT AS invalid_expected_rows,
+            COUNT(*) FILTER (
+                WHERE residual_count IS NULL OR NOT isfinite(residual_count)
+            )::BIGINT AS invalid_residual_rows,
+            COUNT(*) FILTER (
+                WHERE anomaly_score IS NULL OR NOT isfinite(anomaly_score)
+                   OR anomaly_score < 0
+            )::BIGINT AS invalid_score_rows,
+            COUNT(*) FILTER (
+                WHERE expected_count_source IS NULL
+                   OR expected_count_source NOT IN ('ml_prediction', 'rolling_13_week_mean')
+            )::BIGINT AS invalid_expected_source_rows,
+            COUNT(*) FILTER (
+                WHERE anomaly_severity IS NULL
+                   OR anomaly_severity NOT IN ('low', 'medium', 'high', 'critical')
+            )::BIGINT AS invalid_severity_rows,
+            COUNT(*) FILTER (
+                WHERE is_anomaly IS DISTINCT FROM true
+                   OR passes_volume_filter IS DISTINCT FROM true
+            )::BIGINT AS invalid_flag_rows,
+            COUNT(*) FILTER (
+                WHERE abs(
+                    CAST(actual_crime_count AS DOUBLE) - expected_count - residual_count
+                ) > {ANOMALY_ARITHMETIC_TOLERANCE}
+            )::BIGINT AS inconsistent_residual_rows,
+            COUNT(*) FILTER (
+                WHERE anomaly_severity IN ('high', 'critical')
+                  AND residual_count <= 0
+            )::BIGINT AS nonpositive_published_residual_rows,
+            COUNT(*) FILTER (
+                WHERE expected_count_source = 'rolling_13_week_mean'
+                  AND (
+                      expected_historical_count IS NULL
+                      OR NOT isfinite(expected_historical_count)
+                      OR abs(expected_count - expected_historical_count)
+                         > {ANOMALY_ARITHMETIC_TOLERANCE}
+                  )
+            )::BIGINT AS inconsistent_historical_source_rows,
+            COUNT(*) FILTER (
+                WHERE expected_count_source = 'ml_prediction'
+                  AND (
+                      expected_ml_count IS NULL
+                      OR NOT isfinite(expected_ml_count)
+                      OR abs(expected_count - expected_ml_count)
+                         > {ANOMALY_ARITHMETIC_TOLERANCE}
+                  )
+            )::BIGINT AS inconsistent_ml_source_rows
+        FROM read_parquet({sql_string(path)})
+        """,
+    )[0]
+    checks = (
+        ("invalid_week_rows", "Anomaly weeks must be non-null Mondays."),
+        ("invalid_dimension_rows", "Anomaly dimensions must be nonblank text."),
+        ("invalid_actual_rows", "Anomaly actual counts must be nonnegative integers."),
+        (
+            "invalid_expected_rows",
+            "Anomaly expected_count values must be finite and nonnegative.",
+        ),
+        ("invalid_residual_rows", "Anomaly residual values must be finite."),
+        ("invalid_score_rows", "Anomaly scores must be finite and nonnegative."),
+        ("invalid_expected_source_rows", "Anomaly expected-count source is unsupported."),
+        ("invalid_severity_rows", "Anomaly severity is unsupported."),
+        ("invalid_flag_rows", "Anomaly and volume-eligibility flags must both be true."),
+        ("inconsistent_residual_rows", "Anomaly residual arithmetic is inconsistent."),
+        (
+            "nonpositive_published_residual_rows",
+            "High and critical anomaly residuals must be positive.",
+        ),
+        (
+            "inconsistent_historical_source_rows",
+            "Historical anomaly reference does not match its documented source value.",
+        ),
+        (
+            "inconsistent_ml_source_rows",
+            "ML anomaly reference does not match its documented source value.",
+        ),
+    )
+    for key, reason in checks:
+        if int(stats[key]):
+            raise OptionalContractError(reason)
+    if int(stats["source_row_count"]) != int(stats["distinct_logical_key_count"]):
+        raise OptionalContractError("Duplicate anomaly logical key detected.")
+    severity_counts = {
+        str(row["anomaly_severity"]): int(row["anomaly_count"])
+        for row in fetch_dicts(
+            con,
+            f"""
+            SELECT anomaly_severity, COUNT(*)::BIGINT AS anomaly_count
+            FROM read_parquet({sql_string(path)})
+            GROUP BY anomaly_severity
+            ORDER BY anomaly_severity
+            """,
+        )
+    }
+    return {
+        "sourceRowCount": int(stats["source_row_count"]),
+        "severityCounts": {
+            severity: severity_counts.get(severity, 0)
+            for severity in ANOMALY_SEVERITIES
+        },
+        "minWeek": iso_date(stats["min_week"]),
+        "maxWeek": iso_date(stats["max_week"]),
+    }
+
+
 def load_optional_anomalies(con: Any, path: Path) -> dict[str, Any]:
     if not path.exists():
         return _missing_optional(path)
@@ -332,26 +544,28 @@ def load_optional_anomalies(con: Any, path: Path) -> dict[str, Any]:
         missing = sorted(set(ANOMALY_REQUIRED_COLUMNS).difference(parquet_columns(con, path)))
         if missing:
             return optional_error(path, f"Missing required columns: {missing}")
+        _require_anomaly_parquet_types(con, path)
+        source_summary = _validate_anomaly_source(con, path)
         rows = fetch_dicts(
             con,
             f"""
             SELECT
                 week_start,
-                CAST(borough AS VARCHAR) AS borough,
-                CAST(precinct AS VARCHAR) AS precinct,
-                CAST(offense_type AS VARCHAR) AS offense_type,
-                CAST(law_category AS VARCHAR) AS law_category,
+                borough,
+                precinct,
+                offense_type,
+                law_category,
                 actual_crime_count,
                 expected_count,
-                CAST(expected_count_source AS VARCHAR) AS expected_count_source,
+                expected_count_source,
                 residual_count,
                 anomaly_score,
-                lower(CAST(anomaly_severity AS VARCHAR)) AS severity
+                anomaly_severity AS severity
             FROM read_parquet({sql_string(path)})
             WHERE is_anomaly IS TRUE
-              AND lower(CAST(anomaly_severity AS VARCHAR)) IN ('high', 'critical')
+              AND anomaly_severity IN ('high', 'critical')
             ORDER BY
-                CASE lower(CAST(anomaly_severity AS VARCHAR))
+                CASE anomaly_severity
                     WHEN 'critical' THEN 0 ELSE 1
                 END,
                 anomaly_score DESC NULLS LAST,
@@ -361,36 +575,52 @@ def load_optional_anomalies(con: Any, path: Path) -> dict[str, Any]:
         )
         records = []
         for row in rows:
-            records.append(
-                {
-                    "week": required_date(row["week_start"], "anomaly week_start"),
-                    "borough": normalized_string(row["borough"]),
-                    "precinct": normalized_string(row["precinct"]),
-                    "offenseType": normalized_string(row["offense_type"]),
-                    "lawCategory": normalized_string(row["law_category"]),
-                    "actualCount": required_number(
-                        row["actual_crime_count"],
-                        "anomaly actual_crime_count",
-                        minimum=0,
-                        integer=True,
-                    ),
-                    "expectedCount": required_number(
-                        row["expected_count"], "anomaly expected_count", minimum=0
-                    ),
-                    "expectedSource": required_text(
-                        row["expected_count_source"], "anomaly expected_count_source"
-                    ),
-                    "residualCount": required_number(
-                        row["residual_count"], "anomaly residual_count"
-                    ),
-                    "score": required_number(
-                        row["anomaly_score"], "anomaly anomaly_score", minimum=0
-                    ),
-                    "severity": required_text(
-                        row["severity"], "anomaly anomaly_severity"
-                    ),
-                }
-            )
+            record = {
+                "week": required_date(row["week_start"], "anomaly week_start"),
+                "borough": required_text(row["borough"], "anomaly borough"),
+                "precinct": required_text(row["precinct"], "anomaly precinct"),
+                "offenseType": required_text(
+                    row["offense_type"], "anomaly offense_type"
+                ),
+                "lawCategory": required_text(
+                    row["law_category"], "anomaly law_category"
+                ),
+                "actualCount": required_number(
+                    row["actual_crime_count"],
+                    "anomaly actual_crime_count",
+                    minimum=0,
+                    integer=True,
+                ),
+                "expectedCount": required_number(
+                    row["expected_count"], "anomaly expected_count", minimum=0
+                ),
+                "expectedSource": required_text(
+                    row["expected_count_source"], "anomaly expected_count_source"
+                ),
+                "residualCount": required_number(
+                    row["residual_count"], "anomaly residual_count"
+                ),
+                "score": required_number(
+                    row["anomaly_score"], "anomaly anomaly_score", minimum=0
+                ),
+                "severity": required_text(
+                    row["severity"], "anomaly anomaly_severity"
+                ),
+            }
+            if float(record["residualCount"]) <= 0:
+                raise OptionalContractError(
+                    "High and critical anomaly residuals must remain positive after publication rounding."
+                )
+            if not math.isclose(
+                float(record["actualCount"]) - float(record["expectedCount"]),
+                float(record["residualCount"]),
+                rel_tol=0,
+                abs_tol=0.0001,
+            ):
+                raise OptionalContractError(
+                    "Published anomaly residual arithmetic is inconsistent."
+                )
+            records.append(record)
         validate_unique_records(
             records,
             ("week", "borough", "precinct", "offenseType", "lawCategory"),
@@ -411,7 +641,12 @@ def load_optional_anomalies(con: Any, path: Path) -> dict[str, Any]:
                 -float(record["residualCount"]),
             )
         )
-        return {"status": "available", "sourceFile": path.name, "records": records}
+        return {
+            "status": "available",
+            "sourceFile": path.name,
+            "records": records,
+            **source_summary,
+        }
     except OptionalContractError as exc:
         return optional_error(path, str(exc))
     except Exception as exc:  # optional data must not break the Overview
@@ -722,6 +957,243 @@ def metadata_version(source: dict[str, Any], *, model: bool = False) -> dict[str
     return result
 
 
+def _unavailable_anomalies(
+    source: dict[str, Any],
+    status: str,
+    reason: str,
+    *,
+    scoring_end_week: str | None = None,
+) -> dict[str, Any]:
+    result: dict[str, Any] = {
+        "status": status,
+        "sourceFile": source["sourceFile"],
+        "reason": reason,
+        "records": [],
+    }
+    if scoring_end_week is not None:
+        result["scoringEndWeek"] = scoring_end_week
+    return result
+
+
+def gate_anomalies_with_metrics(
+    anomalies: dict[str, Any],
+    metrics: dict[str, Any],
+    date_range: dict[str, Any],
+) -> dict[str, Any]:
+    """Fail closed unless anomaly rows and their methodology horizon reconcile."""
+    if anomalies["status"] != "available":
+        return anomalies
+    if metrics["status"] != "available":
+        return _unavailable_anomalies(
+            anomalies,
+            metrics["status"],
+            (
+                "Anomaly signals were withheld because the companion anomaly metrics "
+                f"artifact is {metrics['status']}."
+            ),
+        )
+
+    data = metrics.get("data")
+    if not isinstance(data, dict):
+        return _unavailable_anomalies(
+            anomalies, "invalid", "Anomaly metrics must be a JSON object."
+        )
+    if data.get("phase") != ANOMALY_METRICS_PHASE:
+        return _unavailable_anomalies(
+            anomalies,
+            "incompatible",
+            "Anomaly metrics identity is incompatible with the Phase 6A contract.",
+        )
+    if data.get("anomaly_columns_used") != WEEKLY_REQUIRED_COLUMNS:
+        return _unavailable_anomalies(
+            anomalies,
+            "incompatible",
+            "Anomaly metrics do not declare the established weekly aggregate inputs.",
+        )
+    output_columns = data.get("output_columns")
+    if not isinstance(output_columns, list) or not set(ANOMALY_REQUIRED_COLUMNS).issubset(
+        output_columns
+    ):
+        return _unavailable_anomalies(
+            anomalies,
+            "incompatible",
+            "Anomaly metrics output-column contract is incompatible.",
+        )
+    config = data.get("anomaly_config")
+    if not isinstance(config, dict) or config.get(
+        "primary_historical_expected_count"
+    ) != ANOMALY_HISTORICAL_METHOD:
+        return _unavailable_anomalies(
+            anomalies,
+            "incompatible",
+            "Anomaly metrics do not document the established historical expectation.",
+        )
+    leakage = data.get("leakage_controls")
+    if not isinstance(leakage, dict) or not (
+        leakage.get("historical_windows_use_prior_weeks_only") is True
+        and leakage.get("random_splits_used") is False
+    ):
+        return _unavailable_anomalies(
+            anomalies,
+            "incompatible",
+            "Anomaly metrics do not verify prior-only leakage controls.",
+        )
+
+    try:
+        generated_at = required_text(
+            data.get("generated_at_utc"), "anomaly metrics generated_at_utc"
+        )
+        generated = datetime.fromisoformat(generated_at.replace("Z", "+00:00"))
+        if generated.tzinfo is None:
+            raise ValueError("timestamp has no timezone")
+        analysis = data.get("analysis_window")
+        if not isinstance(analysis, dict):
+            raise OptionalContractError("Anomaly metrics analysis window is missing.")
+        scoring_end_week = required_date(
+            analysis.get("scoring_end_week"), "anomaly metrics scoring_end_week"
+        )
+        metrics_first_week = required_date(
+            analysis.get("min_week_start"), "anomaly metrics min_week_start"
+        )
+        metrics_last_week = required_date(
+            analysis.get("max_week_start"), "anomaly metrics max_week_start"
+        )
+        latest_excluded = analysis.get("latest_week_excluded_from_scoring")
+        if not isinstance(latest_excluded, bool):
+            raise OptionalContractError(
+                "Anomaly metrics latest-week exclusion flag is invalid."
+            )
+        record_counts = data.get("record_counts")
+        if not isinstance(record_counts, dict):
+            raise OptionalContractError("Anomaly metrics record counts are missing.")
+        anomaly_row_count = required_number(
+            record_counts.get("anomaly_rows"),
+            "anomaly metrics anomaly_rows",
+            minimum=0,
+            integer=True,
+        )
+        severity_rows = data.get("severity_counts")
+        if not isinstance(severity_rows, list):
+            raise OptionalContractError("Anomaly metrics severity counts are missing.")
+        metrics_severity_counts: dict[str, int] = {}
+        for row in severity_rows:
+            if not isinstance(row, dict):
+                raise OptionalContractError(
+                    "Anomaly metrics severity-count row is invalid."
+                )
+            severity = required_text(
+                row.get("anomaly_severity"), "anomaly metrics severity label"
+            )
+            if severity not in ANOMALY_SEVERITIES or severity in metrics_severity_counts:
+                raise OptionalContractError(
+                    "Anomaly metrics severity labels are invalid or duplicated."
+                )
+            metrics_severity_counts[severity] = int(
+                required_number(
+                    row.get("anomaly_count"),
+                    "anomaly metrics severity count",
+                    minimum=0,
+                    integer=True,
+                )
+            )
+        if set(metrics_severity_counts) != set(ANOMALY_SEVERITIES):
+            raise OptionalContractError(
+                "Anomaly metrics severity counts are incomplete."
+            )
+    except (OptionalContractError, TypeError, ValueError) as exc:
+        return _unavailable_anomalies(
+            anomalies, "invalid", f"Invalid anomaly metrics: {exc}"
+        )
+
+    if int(anomaly_row_count) != anomalies["sourceRowCount"]:
+        return _unavailable_anomalies(
+            anomalies,
+            "invalid",
+            "Anomaly metrics row count does not reconcile to the source artifact.",
+        )
+    if metrics_severity_counts != anomalies["severityCounts"]:
+        return _unavailable_anomalies(
+            anomalies,
+            "invalid",
+            "Anomaly metrics severity counts do not reconcile to the source artifact.",
+        )
+
+    scoring_date = date.fromisoformat(scoring_end_week)
+    metrics_first = date.fromisoformat(metrics_first_week)
+    metrics_last = date.fromisoformat(metrics_last_week)
+    overview_first = date.fromisoformat(date_range["firstWeek"])
+    overview_last = date.fromisoformat(date_range["lastWeek"])
+    overview_latest_complete = date.fromisoformat(date_range["latestCompleteWeek"])
+    if any(
+        value.isoweekday() != 1
+        for value in (scoring_date, metrics_first, metrics_last)
+    ):
+        return _unavailable_anomalies(
+            anomalies,
+            "invalid",
+            "Anomaly metrics analysis dates must be Monday week starts.",
+        )
+    if not metrics_first <= scoring_date <= metrics_last:
+        return _unavailable_anomalies(
+            anomalies,
+            "invalid",
+            "Anomaly metrics analysis horizon is internally inconsistent.",
+        )
+    if latest_excluded is not (scoring_date < metrics_last):
+        return _unavailable_anomalies(
+            anomalies,
+            "invalid",
+            "Anomaly metrics latest-week exclusion does not match its horizon.",
+        )
+    source_min = (
+        date.fromisoformat(anomalies["minWeek"]) if anomalies["minWeek"] else None
+    )
+    source_max = (
+        date.fromisoformat(anomalies["maxWeek"]) if anomalies["maxWeek"] else None
+    )
+    if source_min is not None and source_min < overview_first:
+        return _unavailable_anomalies(
+            anomalies,
+            "invalid",
+            "Anomaly source predates the validated Overview observation horizon.",
+        )
+    if source_max is not None and source_max > scoring_date:
+        return _unavailable_anomalies(
+            anomalies,
+            "invalid",
+            "Anomaly source extends beyond its documented scoring horizon.",
+        )
+    if metrics_first < overview_first or metrics_last > overview_last:
+        return _unavailable_anomalies(
+            anomalies,
+            "incompatible",
+            "Anomaly metrics observation horizon exceeds the Overview source horizon.",
+        )
+    if metrics_first > overview_first or metrics_last < overview_last:
+        return _unavailable_anomalies(
+            anomalies,
+            "stale",
+            "Anomaly metrics are behind the validated Overview observation horizon.",
+            scoring_end_week=scoring_end_week,
+        )
+    if scoring_date < overview_latest_complete:
+        return _unavailable_anomalies(
+            anomalies,
+            "stale",
+            "Anomaly scoring is behind the latest complete Overview week.",
+            scoring_end_week=scoring_end_week,
+        )
+    if scoring_date > overview_latest_complete:
+        return _unavailable_anomalies(
+            anomalies,
+            "incompatible",
+            "Anomaly scoring exceeds the latest complete Overview week.",
+        )
+
+    anomalies["scoringEndWeek"] = scoring_end_week
+    return anomalies
+
+
 def mandatory_stats(con: Any, clean_path: Path, weekly_path: Path) -> dict[str, Any]:
     clean = fetch_dicts(
         con,
@@ -975,9 +1447,19 @@ def index_optional_signals(
         "rowColumns": ANOMALY_ROW_COLUMNS,
         "rows": anomaly_rows,
         "summary": {
-            "rowCount": len(anomaly_rows),
-            "highCount": anomaly_counts["high"],
-            "criticalCount": anomaly_counts["critical"],
+            "rowCount": len(anomaly_rows)
+            if anomalies["status"] == "available"
+            else None,
+            "highCount": anomaly_counts["high"]
+            if anomalies["status"] == "available"
+            else None,
+            "criticalCount": anomaly_counts["critical"]
+            if anomalies["status"] == "available"
+            else None,
+            "isEmpty": len(anomaly_rows) == 0
+            if anomalies["status"] == "available"
+            else False,
+            "scoringEndWeek": anomalies.get("scoringEndWeek"),
         },
     }
 
@@ -1333,6 +1815,7 @@ def build_dashboard_overview(
     require_parquet_columns(con, weekly_path, WEEKLY_REQUIRED_COLUMNS, "weekly area")
 
     stats = mandatory_stats(con, clean_events_path, weekly_path)
+    date_range = compute_date_range(stats)
     anomalies = load_optional_anomalies(con, anomalies_path)
     hotspots = load_optional_hotspots(con, hotspots_path, stats["safeEventEndDate"])
     forecasts = load_optional_forecasts(con, ml_predictions_path)
@@ -1342,6 +1825,7 @@ def build_dashboard_overview(
     ml_manifest = read_optional_json(ml_manifest_path)
     baseline_manifest = read_optional_json(baseline_manifest_path)
 
+    anomalies = gate_anomalies_with_metrics(anomalies, anomaly_metrics, date_range)
     forecasts = gate_forecast_with_manifest(forecasts, ml_manifest, stats["lastWeek"])
 
     dimensions = build_dimensions(con, weekly_path, anomalies, hotspots, forecasts)
@@ -1366,7 +1850,6 @@ def build_dashboard_overview(
         "mlManifest": metadata_version(ml_manifest, model=True),
         "baselineManifest": metadata_version(baseline_manifest),
     }
-    date_range = compute_date_range(stats)
     payload = {
         "schemaVersion": SCHEMA_VERSION,
         "generatedAtUtc": deterministic_generated_at_utc(stats["safeEventEndDate"]),
@@ -1510,10 +1993,34 @@ def validate_overview_payload(payload: dict[str, Any]) -> None:
         raise ValueError("Observed event and weekly aggregate counts do not reconcile.")
     for family in ("anomalies", "hotspots", "forecast"):
         signal = payload["signals"].get(family)
-        if not signal or signal.get("status") not in {"available", "missing", "invalid"}:
+        allowed_statuses = (
+            ANOMALY_STATUSES
+            if family == "anomalies"
+            else {"available", "missing", "invalid"}
+        )
+        if not signal or signal.get("status") not in allowed_statuses:
             raise ValueError(f"Invalid optional signal status for {family}.")
         if signal["status"] != "available" and signal["rows"]:
             raise ValueError(f"Unavailable optional signal {family} contains rows.")
+    anomaly_signal = payload["signals"]["anomalies"]
+    anomaly_summary = anomaly_signal.get("summary")
+    if not isinstance(anomaly_summary, dict):
+        raise ValueError("Anomaly signal summary is missing.")
+    if anomaly_signal["status"] == "available":
+        if (
+            anomaly_summary.get("rowCount") != len(anomaly_signal["rows"])
+            or anomaly_summary.get("isEmpty") is not (len(anomaly_signal["rows"]) == 0)
+            or not isinstance(anomaly_summary.get("scoringEndWeek"), str)
+        ):
+            raise ValueError("Available anomaly summary does not reconcile.")
+        date.fromisoformat(anomaly_summary["scoringEndWeek"])
+    elif (
+        anomaly_summary.get("rowCount") is not None
+        or anomaly_summary.get("highCount") is not None
+        or anomaly_summary.get("criticalCount") is not None
+        or anomaly_summary.get("isEmpty") is not False
+    ):
+        raise ValueError("Unavailable anomaly summary contains valid-zero totals.")
     serialized = json.dumps(payload, allow_nan=False).upper()
     leaked = [column for column in SENSITIVE_COLUMNS if column in serialized]
     if leaked:

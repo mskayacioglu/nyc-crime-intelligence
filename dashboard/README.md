@@ -1,7 +1,7 @@
 # NYC Crime Intelligence Dashboard
 
-Phases 7A, 7B, and 7C provide aggregate-only Overview, Hotspot, and Predictive
-Map experiences:
+The dashboard provides aggregate-only Overview, Hotspot, Predictive Map, and
+Anomalies experiences:
 
 - **Overview** remains the first screen and reads compact metadata plus the
   gzip-compressed weekly aggregate cube.
@@ -9,6 +9,9 @@ Map experiences:
   visual map and a keyboard-accessible aggregate hotspot list/detail view.
 - **Predictive Map** strictly loads the browser-safe contract and adds Forecast
   and Expected change modes to the existing Map workspace.
+- **Anomalies** reads the already-established Overview anomaly signal and shows
+  unusually high observed weekly aggregate increases against their documented
+  historical expectation.
 
 The browser never receives complaint-level records, complaint identifiers,
 victim or suspect demographics, person-level scores, or recommendations about
@@ -24,6 +27,26 @@ The Vite, React, and TypeScript project loads or stages these frontend-safe outp
 - `public/data/forecast-map.json` (runtime-validated with `cache: 'no-cache'`)
 - `public/data/precinct-spatial-reference.json` (runtime-validated with
   `cache: 'no-cache'`)
+
+Anomalies adds no parallel frontend artifact. The dedicated view lazily decodes
+`signals.anomalies` from `overview.json`, whose source is the established
+`crime_weekly_area.parquet` -> `anomalies.parquet` / `anomaly_metrics.json` ->
+dashboard Overview build chain. The browser-safe publication contains high and
+critical rows only. Each row carries the observed Monday-starting week,
+borough, precinct, offense, law category, observed aggregate count, selected
+historical reference, signed positive residual, existing anomaly score, and
+severity.
+
+The anomaly decoder accepts only the exact Overview identity and row schema,
+known dimensions and expectation sources, finite nonnegative counts/references
+and scores, positive residuals that reconcile within the four-decimal
+publication tolerance of `0.0001`, unique stable
+logical identities, deterministic order, matching summary counts, aligned
+scoring horizon, and the aggregate-only ethics flags. Contract-declared
+`missing`, `invalid`, `stale`, and `incompatible` states remain distinct;
+available-empty and filtered-empty are also separate. Unavailable or malformed
+values are never converted to zero, while a documented reference value of zero
+remains valid data and makes only the relative percentage unavailable.
 
 The Forecast loader validates unknown JSON without coercion: exact identity and
 schema, deterministic dates and one-week horizon, dimensions/indexes, stable
@@ -71,11 +94,13 @@ Direction and exact values remain textually available. Missing or partial
 baseline is never treated as zero: change is withheld and polygons use lower
 fill opacity plus distinct dashed-outline semantics described in the legend.
 
-The Phase 7A Overview contract and deterministic cube are unchanged. Phase 7B
-uses a separate deterministic `map.json` contract so fixed-snapshot hotspot
-semantics do not become entangled with the weekly observed-count cube. Leaflet
-is loaded directly and lazily only after the user opens the Map view; no React
-map wrapper is required.
+The Phase 7A observed-count cube and core Overview metrics remain unchanged.
+The Anomalies increment strengthens the optional anomaly family inside the
+existing Overview schema and regenerates its JSON metadata. Phase 7B uses a
+separate deterministic `map.json` contract so fixed-snapshot hotspot semantics
+do not become entangled with the weekly observed-count cube. Leaflet is loaded
+directly and lazily only after the user opens the Map view; no React map wrapper
+is required.
 
 ## Interface hierarchy and visual system
 
@@ -84,7 +109,9 @@ the analytical result. Overview stays the default view: compact primary
 metrics establish the current scope, then the weekly trend and geographic and
 category comparisons receive the largest analytical surfaces. Map makes the
 geographic canvas dominant, with the selected-signal detail and accessible
-hotspot list presented as adjacent analytical panes.
+hotspot list presented as adjacent analytical panes. Anomalies uses a bounded
+complete result register beside a synchronized detail pane so every published
+signal remains available without a chart or map.
 
 Repeated methodology and responsible-use copy was removed from the primary
 workspace. Phase names, contract and artifact versions, source filenames,
@@ -121,6 +148,9 @@ is retained.
   overflow.
 - Native landmarks, headings, controls, lists, live status behavior, visible
   focus, keyboard list navigation, and accessible names are preserved.
+- The Anomalies register uses native buttons with `aria-pressed`; visible
+  selection, the polite live detail, and the deterministic first matching row
+  share one selected identity. No custom keyboard handler is used.
 - Severity is encoded with text and shape as well as color. Touch controls use
   a 44 px minimum target.
 - Translucent panes retain structural borders without blur, and a solid-color
@@ -129,11 +159,13 @@ is retained.
 
 ## Refresh dashboard data
 
-From the repository root, use the project Python environment. Refresh Overview
-first so its shared date/filter context is current, then refresh Map and the
-staged Forecast Map contract:
+From the repository root, use the project Python environment. When the weekly
+aggregate has changed, refresh the established anomaly analysis first, then
+Overview so its shared date/filter context and anomaly publication are current.
+Refresh Map and the staged Forecast Map contract afterward:
 
 ```bash
+.venv/bin/python src/analytics/build_anomalies.py
 .venv/bin/python src/analytics/build_dashboard_overview.py
 .venv/bin/python src/analytics/build_dashboard_map.py
 .venv/bin/python src/analytics/build_dashboard_forecast_map.py
@@ -198,6 +230,19 @@ The Overview build continues to write:
 - `dashboard/public/data/overview.json`
 - `dashboard/public/data/overview-cube.bin.gz`
 
+`build_anomalies.py` deterministically derives aggregate-only
+`data/processed/anomalies.parquet` and `anomaly_metrics.json` from the validated
+weekly-area output and the established safe historical backtest predictions.
+For each already-observed segment-week, the selected reference is the
+leakage-safe model estimate when one exists; otherwise it is the prior-only
+13-week mean. The candidate gate requires sufficient prior history and volume,
+at least four observed events, and at least three events above expectation.
+The Overview builder validates the source schema, arithmetic, flags, unique
+keys, ordering, expectation-source reconciliation, and the companion metrics'
+identity, configuration, leakage controls, counts, and horizon before
+publishing. It regenerates the existing Overview artifacts; there is no
+Anomalies-specific browser file.
+
 Pass `--skip-dashboard-copy` to the Map build when only the canonical processed
 artifact should be updated. Missing optional hotspot inputs produce an explicit
 neutral status. Invalid, duplicate, mixed-date, future-dated, or more-than-one-
@@ -209,7 +254,9 @@ The Overview contract continues to represent optional hotspot, anomaly, and
 forecast families with explicit availability states. Missing optional outputs
 do not prevent observed trend analysis from loading. Unsafe optional numerics,
 duplicate logical keys, mixed/future hotspot snapshots, and forecast artifacts
-that do not align with their manifest are withheld rather than coerced.
+that do not align with their manifest are withheld rather than coerced. The
+anomaly family additionally distinguishes stale source horizons and
+incompatible methodology/identity from malformed input.
 
 ## Run locally
 
@@ -219,12 +266,14 @@ npm install
 npm run dev
 ```
 
-Open the URL printed by Vite. Overview is the default application view; use
-**Map & hotspots**, then choose **Forecast** or **Expected change** above the
-workspace. The verified polygons load on first entry into a predictive mode.
+Open the URL printed by Vite. Overview is the default application view. Use
+**Anomalies** for the observed-deviation register, or use **Map & hotspots** and
+then choose **Forecast** or **Expected change** above the workspace. The
+verified polygons load on first entry into a predictive mode.
 Use the shared filters and select a precinct through either its polygon or the
 keyboard-operable list; both update the same detail and model context. The list
-remains the complete non-map path.
+remains the complete non-map path. In Anomalies, select any native result button
+to synchronize the visible selected row, `aria-pressed` state, and detail.
 The verified development server for this redesign is
 <http://127.0.0.1:4173/>.
 
@@ -233,6 +282,8 @@ The verified development server for this redesign is
 From the repository root:
 
 ```bash
+.venv/bin/python -m unittest tests.test_anomaly_detection_contract
+.venv/bin/python -m unittest tests.test_dashboard_overview_contract
 .venv/bin/python -m unittest tests.test_dashboard_forecast_map_contract
 .venv/bin/python -m unittest tests.test_dashboard_precinct_spatial_reference_contract
 .venv/bin/python -m unittest tests/test_dashboard_map_contract.py
@@ -254,7 +305,11 @@ when finished. Check desktop, tablet, and mobile widths. Exercise every filter,
 reset, hotspot selection, keyboard list navigation, the historical-snapshot explanation, and
 the missing/empty/error states; also check polygon/list/detail synchronization,
 zero and partial-baseline presentation, overflow, focus visibility, reduced
-motion, tile-failure resilience, map asset loading, and the browser console.
+motion, tile-failure resilience, map asset loading, and the browser console. For
+Anomalies, also check signed deviation and direction text, reference-source and
+severity agreement, native result selection, list/detail/`aria-pressed`
+synchronization, source-empty versus filtered-empty, and valid-zero reference
+presentation.
 
 ### Redesign verification
 
@@ -297,6 +352,72 @@ The final product-copy pass was rechecked at 1280 × 720: four chart SVGs and al
 15 visible Map tiles rendered, the vector canvas remained present, both concise
 data disclosures opened correctly, horizontal overflow stayed at zero, and no
 development metadata or browser warning/error remained.
+
+### Anomalies increment verification
+
+The current regenerated Overview contract publishes 10,378 deterministic high
+and critical anomaly rows: 3,077 critical and 7,301 high. The default inclusive
+complete-week range, 2024-12-30 through 2025-12-22, contains 645 rows: 175
+critical and 470 high. The deterministic first row is the week of 2025-06-09,
+Manhattan Precinct 5, `OFFENSES AGAINST PUBLIC ADMINI`, misdemeanor, with 31
+observed aggregate events against a 3.0625 historical backtest estimate,
+`+27.9375` signed deviation, and anomaly score 11.8988.
+
+The final increment checks pass ESLint, all 147 Vitest tests in 12 files, the
+2,363-module production build, the zero-vulnerability production dependency
+audit, 64 focused anomaly/Overview/Map/Forecast Map/spatial Python tests, and all
+92 discovered `test_*_contract.py` tests.
+Decoder/filter-only coverage includes malformed identity/schema/dimensions,
+duplicate or misordered rows, non-finite and inconsistent arithmetic,
+summary/horizon disagreement, every availability state, filtering and stable
+ordering, signed direction, analytical priority, valid-zero reference handling,
+native selection and focus retention, Reset, borough/precinct constraints, and
+responsive overflow rules.
+
+The final production build reports these raw/gzip sizes:
+
+| Asset | Size |
+| --- | ---: |
+| HTML | 0.64 / 0.36 kB |
+| MapView CSS | 15.09 / 6.36 kB |
+| Main CSS | 56.86 / 10.22 kB |
+| JSX runtime | 9.25 / 3.50 kB |
+| Lazy Anomalies JavaScript | 17.98 / 5.62 kB |
+| Main JavaScript | 218.12 / 68.57 kB |
+| Map JavaScript | 229.08 / 64.79 kB |
+| Overview JavaScript | 404.31 / 113.53 kB |
+
+Practical in-app browser verification at 1280 × 900, 768 × 1024, and
+390 × 844 found zero page-level horizontal overflow. Mobile controls measured
+44 px and anomaly result buttons at least 109.5 px. The real selected row,
+visible selection, `aria-pressed`, polite live detail, reference, signed
+deviation, direction, score, and severity agreed. Pointer activation of native
+result buttons worked, and focused controls showed their visible focus state.
+
+Shared categorical filtering produced 117 BRONX rows, 16 after choosing BRONX
+Precinct 49, and six after also choosing Petit Larceny. A deliberately
+mismatched law category exercised filtered-empty, and Reset restored all 645
+default-range rows. A Sunday date value outside the Monday-based weekly
+dimension was correctly rejected; valid date filtering is covered by the
+automated suite. Overview retained five metrics, four chart SVGs, and its
+attention table. Map regression checks retained all 396 Hotspots and opened
+Forecast and Expected change successfully.
+
+A deliberate global network failure produced the recoverable **Data
+unavailable** state, and restarting the server restored the application. The
+loading state completed too quickly for a defensible browser observation and is
+therefore claimed only from automated coverage. Clean passes before and after
+the recovery contained no console warnings or errors. The required
+`overview.json`, Overview cube, Map, Forecast, and spatial assets were observed,
+and no failed request surfaced in the clean session. No temporary production
+fixture or state harness was added or left behind.
+
+The installed in-app browser again focused the native anomaly result and showed
+the visible focus ring, but it did not deliver genuine Tab/Enter/Space
+activation to the application. No custom keyboard handler or alternate browser
+surface was used. Native-button Enter/Space behavior and selection/detail
+synchronization pass in Vitest. This recorded browser-channel limitation does
+not change or close the separate Phase 7C.3 verification blocker below.
 
 ### Phase 7C.3 verification
 
@@ -391,6 +512,12 @@ newer one is treated as incompatible. Neither mismatch is rendered as current.
 - The Overview trend baseline for each week uses only its prior eight weeks;
   recent change compares up to four complete weeks with an equal prior window.
 - Anomalies remain observed aggregate deviations from a documented expectation.
+- The Anomalies view publishes high and critical rows only, using a safe
+  historical-week backtest reference where available and the prior-only
+  13-week mean otherwise. Its score and signal priority are not probabilities,
+  policing priorities, or recommendations.
+- Literal unavailable aggregate labels in the source are displayed as
+  unavailable rather than inferred or remapped.
 - Forecasts remain future model estimates shown only with aligned historical
   error context. Overall backtest errors are not recomputed for active filters,
   and the current model does not provide prediction intervals.

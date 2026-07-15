@@ -2650,6 +2650,403 @@ a:focus-visible,
   min-height: 460px;
 }
 
+/* Anomalies */
+.anomalies-view,
+.anomaly-introduction,
+.anomaly-workspace,
+.anomaly-register,
+.anomaly-detail {
+  min-width: 0;
+}
+
+.anomaly-introduction {
+  position: relative;
+  display: grid;
+  grid-template-columns: minmax(0, 1.45fr) minmax(310px, 0.75fr);
+  align-items: stretch;
+  gap: var(--space-5);
+  overflow: hidden;
+  padding: var(--space-5);
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-panel);
+}
+
+.anomaly-introduction::before {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  left: 0;
+  width: 3px;
+  background: var(--color-amber-400);
+  content: '';
+}
+
+.anomaly-introduction__copy {
+  align-self: center;
+}
+
+.anomaly-introduction__copy h2 {
+  margin: var(--space-1) 0 var(--space-2);
+  color: var(--text-primary);
+  font-family: var(--font-heading);
+  font-size: clamp(1.45rem, 2.2vw, 2rem);
+  letter-spacing: -0.025em;
+}
+
+.anomaly-introduction__copy p:not(.section-kicker) {
+  max-width: 66rem;
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 1.65;
+}
+
+.anomaly-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.anomaly-summary-card {
+  display: grid;
+  min-height: 96px;
+  align-content: center;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-control);
+}
+
+.anomaly-summary-card span {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-2xs);
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.anomaly-summary-card strong {
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: 1.35rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.anomaly-summary-card--critical {
+  border-top: 2px solid var(--color-red-400);
+}
+
+.anomaly-summary-card--high {
+  border-top: 2px solid var(--color-amber-400);
+}
+
+.anomaly-workspace {
+  display: grid;
+  min-height: 620px;
+  grid-template-columns: minmax(0, 1.45fr) minmax(320px, 0.68fr);
+  gap: var(--space-4);
+}
+
+.anomaly-register,
+.anomaly-detail,
+.anomaly-state {
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-panel);
+}
+
+.anomaly-register {
+  display: grid;
+  max-height: 680px;
+  grid-template-rows: auto minmax(0, 1fr);
+  overflow: hidden;
+}
+
+.anomaly-register__heading,
+.anomaly-detail__heading {
+  display: flex;
+  min-height: 62px;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.anomaly-register__heading h3,
+.anomaly-detail__heading h3 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: var(--font-size-base);
+}
+
+.anomaly-register__heading p,
+.anomaly-detail__heading p {
+  margin: var(--space-1) 0 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.anomaly-register__count {
+  flex: 0 0 auto;
+  color: var(--color-cyan-300);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.anomaly-register__list {
+  min-height: 0;
+  margin: 0;
+  padding: 0;
+  overflow-y: auto;
+  list-style: none;
+  scrollbar-color: var(--color-steel-600) var(--surface-control);
+}
+
+.anomaly-register__list li + li {
+  border-top: 1px solid var(--border-subtle);
+}
+
+.anomaly-register__list button {
+  position: relative;
+  display: grid;
+  width: 100%;
+  min-height: 72px;
+  grid-template-columns: 48px minmax(0, 1fr) minmax(116px, auto) minmax(112px, auto);
+  align-items: center;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 0;
+  background: transparent;
+  color: var(--text-secondary);
+  text-align: left;
+}
+
+.anomaly-register__list button:hover {
+  background: var(--chart-hover);
+}
+
+.anomaly-register__list button:focus-visible {
+  outline-offset: -3px;
+}
+
+.anomaly-register__list button.is-selected {
+  background: rgba(134, 217, 255, 0.075);
+  box-shadow: inset 3px 0 0 var(--color-cyan-400);
+}
+
+.anomaly-register__rank,
+.anomaly-register__deviation {
+  font-family: var(--font-mono);
+  font-size: var(--font-size-xs);
+  font-variant-numeric: tabular-nums;
+}
+
+.anomaly-register__rank {
+  color: var(--text-muted);
+}
+
+.anomaly-register__identity {
+  min-width: 0;
+}
+
+.anomaly-register__identity strong,
+.anomaly-register__identity small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.anomaly-register__identity strong {
+  color: var(--text-primary);
+  font-size: var(--font-size-sm);
+}
+
+.anomaly-register__identity small {
+  margin-top: var(--space-1);
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+}
+
+.anomaly-register__deviation {
+  color: var(--color-amber-400);
+  text-align: right;
+}
+
+.anomaly-priority {
+  display: inline-flex;
+  min-height: 28px;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-1);
+  padding: 0 var(--space-2);
+  border: 1px solid currentColor;
+  font-family: var(--font-mono);
+  font-size: var(--font-size-2xs);
+  font-weight: 700;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.anomaly-priority--critical {
+  color: var(--color-red-400);
+}
+
+.anomaly-priority--high {
+  color: var(--color-amber-400);
+}
+
+.anomaly-detail {
+  align-self: start;
+  overflow: hidden;
+}
+
+.anomaly-detail__body {
+  display: grid;
+  gap: var(--space-4);
+  padding: var(--space-4);
+}
+
+.anomaly-detail__scope {
+  margin: 0;
+  color: var(--text-secondary);
+  font-size: var(--font-size-sm);
+  line-height: 1.55;
+  overflow-wrap: anywhere;
+}
+
+.anomaly-detail__metrics {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 1px;
+  margin: 0;
+  border: 1px solid var(--border-subtle);
+  background: var(--border-subtle);
+}
+
+.anomaly-detail__metrics > div {
+  min-width: 0;
+  padding: var(--space-3);
+  background: var(--surface-control);
+}
+
+.anomaly-detail__metrics dt {
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-2xs);
+  letter-spacing: 0.055em;
+  text-transform: uppercase;
+}
+
+.anomaly-detail__metrics dd {
+  margin: var(--space-1) 0 0;
+  color: var(--text-primary);
+  font-family: var(--font-mono);
+  font-size: var(--font-size-sm);
+  font-variant-numeric: tabular-nums;
+  overflow-wrap: anywhere;
+}
+
+.anomaly-detail__direction {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: var(--space-2);
+  margin: 0;
+  padding: var(--space-2) var(--space-3);
+  border-left: 3px solid var(--color-amber-400);
+  background: var(--surface-warning);
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+}
+
+.anomaly-detail__direction strong {
+  color: var(--text-primary);
+}
+
+.anomaly-detail__interpretation {
+  margin: 0;
+  color: var(--text-muted);
+  font-size: var(--font-size-xs);
+  line-height: 1.55;
+}
+
+.anomaly-empty,
+.anomaly-state {
+  display: flex;
+  min-height: 280px;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-4);
+  padding: var(--space-6);
+  color: var(--text-muted);
+  text-align: left;
+}
+
+.anomaly-empty h3,
+.anomaly-state h2 {
+  margin: 0 0 var(--space-1);
+  color: var(--text-primary);
+}
+
+.anomaly-empty p,
+.anomaly-state p {
+  max-width: 46rem;
+  margin: 0;
+  line-height: 1.55;
+}
+
+.anomaly-state--invalid,
+.anomaly-state--incompatible {
+  border-color: var(--border-critical);
+}
+
+.anomaly-state--missing,
+.anomaly-state--stale {
+  border-color: var(--border-warning);
+}
+
+.anomaly-methodology {
+  border: 1px solid var(--border-subtle);
+  background: var(--surface-panel);
+}
+
+.anomaly-methodology > summary {
+  display: flex;
+  min-height: 44px;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 0 var(--space-4);
+  color: var(--text-secondary);
+  cursor: pointer;
+  font-size: var(--font-size-sm);
+}
+
+.anomaly-methodology__body {
+  display: grid;
+  gap: var(--space-3);
+  padding: 0 var(--space-4) var(--space-4);
+  color: var(--text-secondary);
+  font-size: var(--font-size-xs);
+  line-height: 1.6;
+}
+
+.anomaly-methodology__body p,
+.anomaly-methodology__body ul {
+  margin: 0;
+}
+
+.anomaly-methodology__body ul {
+  padding-left: 1.2rem;
+}
+
+.anomalies-module-loading {
+  min-height: 520px;
+}
+
 @media (max-width: 660px) {
   .map-mode-control { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); padding: var(--space-2); }
   .map-mode-control button { padding: 0 var(--space-1); }
@@ -2658,6 +3055,109 @@ a:focus-visible,
   }
   .predictive-map-legend strong {
     flex: 1 0 100%;
+  }
+}
+
+@media (max-width: 900px) {
+  .anomaly-introduction,
+  .anomaly-workspace {
+    grid-template-columns: 1fr;
+  }
+
+  .anomaly-workspace {
+    min-height: 0;
+  }
+
+  .anomaly-register {
+    max-height: 600px;
+  }
+
+  .anomaly-detail {
+    width: 100%;
+  }
+}
+
+@media (max-width: 660px) {
+  .view-navigation__item {
+    min-width: 0;
+  }
+
+  .anomaly-introduction {
+    gap: var(--space-3);
+    padding: var(--space-4);
+  }
+
+  .anomaly-summary-grid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+
+  .anomaly-summary-card {
+    min-height: 78px;
+    padding: var(--space-2);
+  }
+
+  .anomaly-summary-card strong {
+    font-size: 1rem;
+  }
+
+  .anomaly-register {
+    max-height: 560px;
+  }
+
+  .anomaly-register__heading,
+  .anomaly-detail__heading {
+    align-items: flex-start;
+    padding: var(--space-3);
+  }
+
+  .anomaly-register__list button {
+    min-height: 92px;
+    grid-template-columns: 34px minmax(0, 1fr) auto;
+    gap: var(--space-2);
+    padding: var(--space-3);
+  }
+
+  .anomaly-register__deviation {
+    grid-column: 2;
+    text-align: left;
+  }
+
+  .anomaly-priority {
+    grid-row: 1 / span 2;
+    grid-column: 3;
+    align-self: center;
+  }
+
+  .anomaly-detail__body {
+    padding: var(--space-3);
+  }
+
+  .anomaly-empty,
+  .anomaly-state {
+    min-height: 240px;
+    align-items: flex-start;
+    padding: var(--space-5) var(--space-4);
+  }
+}
+
+@media (max-width: 390px) {
+  .anomaly-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .anomaly-summary-card {
+    min-height: 64px;
+    grid-template-columns: 1fr auto;
+    align-items: center;
+  }
+
+  .anomaly-detail__metrics {
+    grid-template-columns: 1fr;
+  }
+
+  .anomaly-priority {
+    padding: 0 var(--space-1);
+    font-size: 0.6rem;
   }
 }
 

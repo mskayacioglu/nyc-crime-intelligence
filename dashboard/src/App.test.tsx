@@ -12,6 +12,17 @@ vi.mock('./components/MapView', () => ({
   ),
 }))
 
+vi.mock('./components/AnomaliesView', () => ({
+  default: ({ filters }: { filters: { boroughIndex: number | null } }) => (
+    <main id="main-content">
+      <h2>Anomalies View</h2>
+      <p data-testid="anomaly-shared-borough">
+        {filters.boroughIndex === null ? 'all' : filters.boroughIndex}
+      </p>
+    </main>
+  ),
+}))
+
 describe('Dashboard view navigation', () => {
   it('opens the Map from Overview and returns without changing the default screen', async () => {
     const user = userEvent.setup()
@@ -32,6 +43,28 @@ describe('Dashboard view navigation', () => {
 
     await user.click(screen.getByRole('button', { name: 'Overview' }))
     expect(await screen.findByTestId('selected-total')).toHaveTextContent('171')
+  })
+
+  it('opens the lazy Anomalies view with the shared filter scope', async () => {
+    const user = userEvent.setup()
+    render(<App loader={async () => overviewFixture()} />)
+    await screen.findByTestId('selected-total')
+
+    await user.selectOptions(screen.getByLabelText('Borough'), '0')
+    await user.click(screen.getByRole('button', { name: 'Anomalies' }))
+
+    expect(
+      await screen.findByRole('heading', { name: 'Anomalies View' }),
+    ).toBeInTheDocument()
+    expect(screen.getByTestId('anomaly-shared-borough')).toHaveTextContent('0')
+    expect(screen.getByRole('button', { name: 'Anomalies' })).toHaveAttribute(
+      'aria-current',
+      'page',
+    )
+    expect(screen.getByRole('link', { name: 'Skip to Anomalies' })).toBeInTheDocument()
+
+    await user.click(screen.getByRole('button', { name: 'Overview' }))
+    expect(screen.getByLabelText('Borough')).toHaveValue('0')
   })
 })
 

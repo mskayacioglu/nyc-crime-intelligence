@@ -375,10 +375,42 @@ Başarı kriteri:
 
 ### Anomalies
 
-- Normalden yüksek artışlar
-- Bölge, suç tipi ve tarih bilgisi
-- Tarihsel ortalamayla karşılaştırma
-- Öncelik seviyesi
+Durum: tamamlandı. Ayrı **Anomalies** görünümü, geleceğe dönük tahmin veya
+hotspot yoğunluğu yerine zaten gözlemlenmiş haftalık aggregate artışları
+gösterir. Yeni bir anomali tanımı ya da tarayıcı artifact'i üretilmedi;
+mevcut `crime_weekly_area.parquet` -> `anomalies.parquet` /
+`anomaly_metrics.json` -> `dashboard_overview.json` zinciri ve
+`overview.json` içindeki frontend-safe yüksek/kritik sinyaller kullanıldı.
+
+Teslim edilen deneyim:
+
+- Anomali haftası, borough, precinct, suç tipi ve law category birlikte
+  gösterilir.
+- Gözlemlenen aggregate sayı; leakage-safe tarihsel hafta backtest tahmini
+  varsa onunla, yoksa yalnızca önceki 13 haftanın ortalamasıyla karşılaştırılır.
+- İşaretli sapma, yön metni, mevcut anomaly score ve yüksek/kritik analitik
+  sinyal önceliği birlikte gösterilir; yön veya önem yalnızca renkle kodlanmaz.
+- Sıralama critical, high, score, hafta ve kararlı aggregate kimliği üzerinden
+  deterministiktir. Öncelik etiketi suç ciddiyeti, polis önceliği, devriye ya da
+  yaptırım önerisi değildir.
+- Global tarih, borough, precinct, offense ve law filtreleri Overview ile aynı
+  semantics'i kullanır; borough precinct seçeneklerini sınırlar ve Reset
+  varsayılan tamamlanmış hafta aralığını geri getirir.
+- Native düğmelerden oluşan eksiksiz liste, görünür seçim, `aria-pressed`, canlı
+  detay ve kararlı ilk seçim aynı state'i paylaşır. Eksik, geçersiz, stale,
+  uyumsuz, kaynak-empty, filtrelenmiş-empty, loading ve network-error durumları
+  sıfır değer üretilmeden ayrılır.
+- 1280 x 900, 768 x 1024 ve 390 x 844 kontrollerinde sayfa düzeyinde yatay
+  taşma yoktur; mobil kontroller en az 44 px'dir.
+
+Mevcut in-app tarayıcı native düğmeyi odaklayıp görünür focus ring'i gösterdi,
+ancak gerçek Tab/Enter/Space olaylarını uygulamaya iletmedi. Uygulamaya özel
+klavye handler'ı eklenmedi; native kontrol davranışı otomatik regresyon
+testleriyle doğrulandı. Bu araç sınırlaması yukarıdaki ayrı Phase 7C.3
+verification-incomplete kapısını değiştirmez veya kapatmaz.
+
+Uygulama, veri sözleşmesi, doğrulama ve sınırlar
+`reports/dashboard_anomalies_view.md` içinde kaydedildi.
 
 ### Governance
 
