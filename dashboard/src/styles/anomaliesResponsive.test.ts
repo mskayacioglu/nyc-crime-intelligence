@@ -35,9 +35,15 @@ describe('Anomalies responsive layout contract', () => {
     )
   })
 
-  it('uses mobile-safe navigation, list cards, and detail metrics', () => {
+  it('uses a two-by-two mobile navigation, list cards, and detail metrics', () => {
     expect(appCss).toMatch(
-      /@media \(max-width: 660px\)[\s\S]*?\.view-navigation__item\s*{[^}]*min-width:\s*0;/,
+      /@media \(max-width: 660px\)[\s\S]*?\.view-navigation\s*{[^}]*display:\s*grid;[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/,
+    )
+    expect(appCss).toMatch(
+      /@media \(max-width: 660px\)[\s\S]*?\.view-navigation__item\s*{[^}]*min-width:\s*0;[^}]*min-height:\s*44px;/,
+    )
+    expect(appCss).toMatch(
+      /@media \(max-width: 660px\)[\s\S]*?\.responsible-boundary\s*{[^}]*grid-column:\s*1 \/ -1;/,
     )
     expect(appCss).toMatch(
       /@media \(max-width: 660px\)[\s\S]*?\.anomaly-register__list button\s*{[^}]*min-height:\s*92px;/,

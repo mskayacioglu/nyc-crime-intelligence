@@ -49,6 +49,12 @@ describe('Forecast Map runtime contract', () => {
     expect(first.forecast.rows).toHaveLength(5852)
     expect(first.dimensions.forecastWeeks).toEqual(['2026-01-05'])
     expect(first.locationKeySemantics.spatialReferenceAvailable).toBe(false)
+    expect(first.model.artifactGeneratedAtUtc).toBe('2026-07-05T12:40:05.068774+00:00')
+    expect(first.model.independentTrainingTime).toEqual({
+      status: 'unavailable',
+      timestamp: null,
+      reason: 'No independent training-completion timestamp is recorded.',
+    })
   })
 
   it('fetches the fixed path without cache and does not mutate the source', async () => {
@@ -65,6 +71,16 @@ describe('Forecast Map runtime contract', () => {
     ['negative value', (v: Record<string, unknown>) => { (v.forecast as {rows:unknown[][]}).rows[0][5]=-1 }],
     ['unsafe privacy', (v: Record<string, unknown>) => { (v.privacy as Record<string,unknown>).aggregateOnly=false }],
     ['zero baseline percentage', (v: Record<string, unknown>) => { const row=(v.forecast as {rows:unknown[][]}).rows.find(r=>r[6]===0)!; row[8]=0 }],
+    ['malformed artifact timestamp', (v: Record<string, unknown>) => { (v.model as Record<string,unknown>).artifactGeneratedAtUtc='2026-02-30T12:40:05+00:00' }],
+    ['inferred training timestamp', (v: Record<string, unknown>) => { ((v.model as Record<string,unknown>).independentTrainingTime as Record<string,unknown>).timestamp='2026-07-05T12:40:05Z' }],
+    ['contradictory training status', (v: Record<string, unknown>) => { ((v.model as Record<string,unknown>).independentTrainingTime as Record<string,unknown>).status='available' }],
+    ['absolute forecast source path', (v: Record<string, unknown>) => { (v.forecast as Record<string,unknown>).sourceFile='/Users/example/private/forecast.parquet' }],
+    ['absolute baseline source path', (v: Record<string, unknown>) => { (v.baseline as Record<string,unknown>).sourceFile='/Users/example/private/baseline.parquet' }],
+    ['absolute baseline manifest path', (v: Record<string, unknown>) => { (v.baseline as Record<string,unknown>).manifestSourceFile='/Users/example/private/manifest.json' }],
+    ['absolute historical source path', (v: Record<string, unknown>) => { ((v.model as Record<string,unknown>).historicalError as Record<string,unknown>).sourceFile='/Users/example/private/metrics.json' }],
+    ['zero backtest rows', (v: Record<string, unknown>) => { ((v.model as Record<string,unknown>).historicalError as Record<string,unknown>).backtestRowCount=0 }],
+    ['reversed backtest range', (v: Record<string, unknown>) => { const h=(v.model as {historicalError:Record<string,unknown>}).historicalError; h.backtestStartWeek='2025-12-22'; h.backtestEndWeek='2024-12-30' }],
+    ['noncanonical artifact timestamp', (v: Record<string, unknown>) => { (v.model as Record<string,unknown>).artifactGeneratedAtUtc='2026-07-05T12:40:05.068774Z' }],
   ])('rejects malformed %s contracts', (_name, mutate) => {
     const value=copy() as Record<string,unknown>; mutate(value)
     expect(()=>decodeForecastMap(value)).toThrow()
@@ -116,7 +132,12 @@ describe('Forecast Map runtime contract', () => {
     staleAvailability.forecastPointEstimates='stale'
     stale.model={
       status:'stale',sourceFile:'model_manifest.json',reason:'Model is behind observations.',
-      artifactType:null,artifactVersion:null,name:null,version:null,forecastWeek:null,
+      artifactType:null,artifactVersion:null,artifactGeneratedAtUtc:null,
+      independentTrainingTime:{
+        status:'unavailable',timestamp:null,
+        reason:'No independent training-completion timestamp is recorded.',
+      },
+      name:null,version:null,forecastWeek:null,
       trainingStartWeek:null,trainingThroughWeek:null,leakageControlsVerified:false,
       pointEstimatesOnly:true,predictionIntervalsAvailable:false,
       historicalError:{status:'invalid',sourceFile:'ml_metrics.json',reason:'Historical context cannot align.'},

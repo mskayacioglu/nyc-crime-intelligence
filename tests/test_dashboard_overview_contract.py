@@ -1,9 +1,13 @@
 import importlib.util
+import io
 import json
+import sys
 import tempfile
 import unittest
+from contextlib import redirect_stdout
 from datetime import date
 from pathlib import Path
+from unittest.mock import patch
 
 
 MODULE_PATH = (
@@ -35,27 +39,102 @@ class DashboardOverviewContractTest(unittest.TestCase):
         }
         duckdb = build_dashboard_overview.require_duckdb()
         con = duckdb.connect(database=":memory:")
+        quality_columns = list(build_dashboard_overview.QUALITY_FLAG_FIELDS.values())
+        quality_column_sql = ",\n                ".join(
+            f"{column} BOOLEAN" for column in quality_columns
+        )
         con.execute(
-            """
+            f"""
             CREATE TABLE clean_events (
                 complaint_from_date DATE,
                 is_clean_event_for_aggregate BOOLEAN,
+                borough VARCHAR,
+                precinct VARCHAR,
+                offense_type VARCHAR,
+                law_category VARCHAR,
+                {quality_column_sql},
                 complaint_number VARCHAR,
                 SUSP_RACE VARCHAR
             )
             """
         )
-        clean_rows = [
-            (date(2024, 1, 1), True, f"event-{index}", "PRIVATE-VALUE")
-            for index in range(9)
+
+        def clean_row(
+            complaint_date,
+            aggregate_safe,
+            borough,
+            precinct,
+            offense,
+            law_category,
+            complaint_number,
+            *active_flags,
+        ):
+            return (
+                complaint_date,
+                aggregate_safe,
+                borough,
+                precinct,
+                offense,
+                law_category,
+                *(column in active_flags for column in quality_columns),
+                complaint_number,
+                "PRIVATE-VALUE",
+            )
+
+        missing_precinct = build_dashboard_overview.QUALITY_FLAG_FIELDS[
+            "missingPrecinct"
         ]
-        clean_rows.extend(
-            [
-                (date(2024, 1, 14), True, "event-9", "PRIVATE-VALUE"),
-                (date(2099, 1, 1), False, "unsafe-event", "PRIVATE-VALUE"),
-            ]
+        missing_coordinates = build_dashboard_overview.QUALITY_FLAG_FIELDS[
+            "missingCoordinates"
+        ]
+        future_start = build_dashboard_overview.QUALITY_FLAG_FIELDS[
+            "futureComplaintStartDate"
+        ]
+        clean_rows = [
+            clean_row(date(2024, 1, 1), True, "BRONX", "1", "THEFT", "FELONY", "event-0"),
+            clean_row(date(2024, 1, 1), True, "BRONX", "1", "THEFT", "FELONY", "event-1"),
+            clean_row(date(2024, 1, 1), True, "BRONX", "1", "THEFT", "FELONY", "event-2"),
+            clean_row(date(2024, 1, 1), True, "MANHATTAN", "1", "THEFT", "FELONY", "event-3"),
+            clean_row(date(2024, 1, 8), True, "BRONX", "1", "THEFT", "FELONY", "event-4"),
+            clean_row(date(2024, 1, 8), True, "BROOKLYN", "2", "ASSAULT", "MISDEMEANOR", "event-5"),
+            clean_row(date(2024, 1, 8), True, "BROOKLYN", "2", "ASSAULT", "MISDEMEANOR", "event-6"),
+            clean_row(date(2024, 1, 8), True, "QUEENS", "2", "ASSAULT", "MISDEMEANOR", "event-7"),
+            clean_row(
+                date(2024, 1, 14),
+                True,
+                "QUEENS",
+                None,
+                "FRAUD",
+                "VIOLATION",
+                "event-8",
+                missing_precinct,
+            ),
+            clean_row(
+                date(2024, 1, 14),
+                True,
+                "QUEENS",
+                None,
+                "FRAUD",
+                "VIOLATION",
+                "event-9",
+                missing_precinct,
+                missing_coordinates,
+            ),
+            clean_row(
+                date(2099, 1, 1),
+                False,
+                "BRONX",
+                "1",
+                "THEFT",
+                "FELONY",
+                "unsafe-event",
+                future_start,
+            ),
+        ]
+        placeholders = ", ".join("?" for _ in clean_rows[0])
+        con.executemany(
+            f"INSERT INTO clean_events VALUES ({placeholders})", clean_rows
         )
-        con.executemany("INSERT INTO clean_events VALUES (?, ?, ?, ?)", clean_rows)
         con.execute(
             f"COPY clean_events TO {build_dashboard_overview.sql_string(paths['clean'])} "
             "(FORMAT PARQUET)"
@@ -386,6 +465,28 @@ class DashboardOverviewContractTest(unittest.TestCase):
         con.close()
         return target
 
+    def mutate_parquet(
+        self,
+        source: Path,
+        target: Path,
+        table_name: str,
+        statements: list[str],
+    ) -> Path:
+        duckdb = build_dashboard_overview.require_duckdb()
+        con = duckdb.connect(database=":memory:")
+        con.execute(
+            f"CREATE TABLE {table_name} AS SELECT * FROM read_parquet("
+            f"{build_dashboard_overview.sql_string(source)})"
+        )
+        for statement in statements:
+            con.execute(statement)
+        con.execute(
+            f"COPY {table_name} TO {build_dashboard_overview.sql_string(target)} "
+            "(FORMAT PARQUET)"
+        )
+        con.close()
+        return target
+
     def mutate_anomaly_metrics(self, source: Path, target: Path, mutate) -> Path:
         payload = json.loads(source.read_text(encoding="utf-8"))
         mutate(payload)
@@ -419,6 +520,59 @@ class DashboardOverviewContractTest(unittest.TestCase):
             self.assertEqual(first[2].read_bytes(), second[2].read_bytes())
             self.assertEqual(first[0]["generatedAtUtc"], "2024-01-14T00:00:00Z")
 
+    def test_cli_copies_canonical_overview_and_cube_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = self.write_inputs(root / "inputs")
+            canonical_overview = root / "processed" / "dashboard_overview.json"
+            canonical_cube = root / "processed" / "dashboard_overview_cube.bin.gz"
+            dashboard_dir = root / "dashboard" / "public" / "data"
+            argv = [
+                "build_dashboard_overview.py",
+                "--project-root",
+                str(root),
+                "--dashboard-data-dir",
+                str(dashboard_dir),
+                "--clean-events",
+                str(paths["clean"]),
+                "--weekly-area",
+                str(paths["weekly"]),
+                "--anomalies",
+                str(paths["anomalies"]),
+                "--hotspots",
+                str(paths["hotspots"]),
+                "--ml-predictions",
+                str(paths["forecast"]),
+                "--anomaly-metrics",
+                str(paths["anomaly_metrics"]),
+                "--hotspot-metrics",
+                str(paths["hotspot_metrics"]),
+                "--ml-metrics",
+                str(paths["ml_metrics"]),
+                "--ml-manifest",
+                str(paths["ml_manifest"]),
+                "--baseline-manifest",
+                str(paths["baseline_manifest"]),
+                "--overview-output",
+                str(canonical_overview),
+                "--cube-output",
+                str(canonical_cube),
+                "--threads",
+                "1",
+            ]
+            with patch.object(sys, "argv", argv), redirect_stdout(io.StringIO()):
+                build_dashboard_overview.main()
+
+            canonical_overview_bytes = canonical_overview.read_bytes()
+            canonical_cube_bytes = canonical_cube.read_bytes()
+            dashboard_overview_bytes = (dashboard_dir / "overview.json").read_bytes()
+            dashboard_cube_bytes = (
+                dashboard_dir / "overview-cube.bin.gz"
+            ).read_bytes()
+
+        self.assertEqual(canonical_overview_bytes, dashboard_overview_bytes)
+        self.assertEqual(canonical_cube_bytes, dashboard_cube_bytes)
+
     def test_sensitive_fields_and_event_records_are_absent_and_unsafe_rows_excluded(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
@@ -435,6 +589,104 @@ class DashboardOverviewContractTest(unittest.TestCase):
         self.assertNotIn("COMPLAINT_NUMBER", serialized)
         for column in build_dashboard_overview.SENSITIVE_COLUMNS:
             self.assertNotIn(column, serialized)
+
+    def test_quality_counts_distinguish_source_issues_and_retained_unknowns(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            payload, _, _ = self.build(
+                self.write_inputs(root / "inputs"), root / "output"
+            )
+        source = payload["dataQuality"]["sourceIssueCounts"]
+        self.assertEqual(source["populationCount"], 11)
+        self.assertEqual(source["missingPrecinct"], 2)
+        self.assertEqual(source["missingCoordinates"], 1)
+        self.assertEqual(source["futureComplaintStartDate"], 1)
+        self.assertEqual(source["missingBorough"], 0)
+        self.assertEqual(source["invalidLawCategory"], 0)
+        self.assertEqual(source["rowsWithAnyIssue"], 3)
+        self.assertEqual(source["rowsWithMultipleIssues"], 1)
+        self.assertEqual(source["maximumIssuesPerRow"], 2)
+        self.assertTrue(source["categoriesOverlap"])
+        self.assertTrue(source["countsAreNonAdditive"])
+
+        unknown = payload["dataQuality"]["aggregateSafeUnknownCounts"]
+        self.assertEqual(
+            unknown,
+            {
+                "populationCount": 10,
+                "borough": 0,
+                "precinct": 2,
+                "offense": 0,
+                "lawCategory": 0,
+                "valuesRetained": True,
+                "categoriesOverlap": True,
+            },
+        )
+
+    def test_quality_flags_require_boolean_non_null_values(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = self.write_inputs(root / "inputs")
+            missing_borough = build_dashboard_overview.QUALITY_FLAG_FIELDS[
+                "missingBorough"
+            ]
+            invalid_type = self.mutate_parquet(
+                paths["clean"],
+                root / "invalid-flag-type.parquet",
+                "invalid_flag_type",
+                [
+                    "ALTER TABLE invalid_flag_type ALTER COLUMN "
+                    f"{missing_borough} TYPE INTEGER"
+                ],
+            )
+            with self.assertRaisesRegex(ValueError, "flags must be BOOLEAN"):
+                self.build(paths, root / "invalid-type-output", clean=invalid_type)
+
+            null_flag = self.mutate_parquet(
+                paths["clean"],
+                root / "null-flag.parquet",
+                "null_flag",
+                [
+                    f"UPDATE null_flag SET {missing_borough} = NULL "
+                    "WHERE complaint_number = 'event-0'"
+                ],
+            )
+            with self.assertRaisesRegex(ValueError, "flags contain null"):
+                self.build(paths, root / "null-output", clean=null_flag)
+
+    def test_retained_unknown_counts_must_reconcile_to_weekly_literals(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = self.write_inputs(root / "inputs")
+            mismatched_weekly = self.mutate_parquet(
+                paths["weekly"],
+                root / "mismatched-unknown.parquet",
+                "mismatched_unknown",
+                ["UPDATE mismatched_unknown SET precinct = '3' WHERE precinct = 'UNKNOWN'"],
+            )
+            with self.assertRaisesRegex(ValueError, "UNKNOWN dimension counts"):
+                self.build(
+                    paths,
+                    root / "mismatched-output",
+                    weekly=mismatched_weekly,
+                )
+
+    def test_quality_payload_validation_rejects_unavailable_or_contradictory_counts(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            payload, _, _ = self.build(
+                self.write_inputs(root / "inputs"), root / "output"
+            )
+
+        unavailable = json.loads(json.dumps(payload))
+        unavailable["dataQuality"]["aggregateSafeUnknownCounts"]["lawCategory"] = None
+        with self.assertRaisesRegex(ValueError, "UNKNOWN counts"):
+            build_dashboard_overview.validate_overview_payload(unavailable)
+
+        contradictory = json.loads(json.dumps(payload))
+        contradictory["dataQuality"]["sourceIssueCounts"]["rowsWithAnyIssue"] = 0
+        with self.assertRaisesRegex(ValueError, "source issue counts"):
+            build_dashboard_overview.validate_overview_payload(contradictory)
 
     def test_cube_filters_reconcile_to_consistent_totals(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

@@ -8,6 +8,8 @@ import {
 const PATH = '/data/forecast-map.json'
 const DATE = /^\d{4}-\d{2}-\d{2}$/
 const UTC = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}Z$/
+const UTC_OFFSET_TIMESTAMP =
+  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{1,6})?\+00:00$/
 const PRECINCT = /^[1-9]\d{0,2}$/
 const FORBIDDEN = /(complaint.?id|cmplnt|victim|suspect|race|sex|age.?group|exact.?address|latitude|longitude|person.?score|patrol.?priority|enforcement.?target)/i
 const STATUSES = new Set<ForecastMapStatus>(['available', 'missing', 'invalid', 'stale'])
@@ -42,10 +44,35 @@ function isoDate(value: unknown): value is string {
   return !Number.isNaN(parsed.valueOf()) && parsed.toISOString().slice(0, 10) === value
 }
 
+function utcOffsetTimestamp(value: unknown): value is string {
+  if (typeof value !== 'string' || !UTC_OFFSET_TIMESTAMP.test(value)) return false
+  const parsed = new Date(value)
+  return (
+    !Number.isNaN(parsed.valueOf()) &&
+    isoDate(value.slice(0, 10)) &&
+    parsed.toISOString().slice(0, 19) === value.slice(0, 19)
+  )
+}
+
+function safeSourceFile(value: unknown): value is string {
+  return (
+    typeof value === 'string' &&
+    value.length > 0 &&
+    !value.includes('/') &&
+    !value.includes('\\') &&
+    value !== '.' &&
+    value !== '..'
+  )
+}
+
 function addDays(value: string, days: number): string {
   return new Date(Date.parse(`${value}T00:00:00Z`) + days * 86_400_000)
     .toISOString()
     .slice(0, 10)
+}
+
+function monday(value: string): boolean {
+  return new Date(`${value}T00:00:00Z`).getUTCDay() === 1
 }
 
 function labels(value: unknown, name: string): string[] {
@@ -275,8 +302,7 @@ export function decodeForecastMap(value: unknown): ForecastMapContract {
   ]
   exactKeys(forecast, forecastKeys, 'forecast')
   if (
-    typeof forecast.sourceFile !== 'string' ||
-    !forecast.sourceFile ||
+    !safeSourceFile(forecast.sourceFile) ||
     typeof forecast.isEmpty !== 'boolean' ||
     JSON.stringify(forecast.rowColumns) !== JSON.stringify(FORECAST_MAP_ROW_COLUMNS) ||
     !Array.isArray(forecast.rows) ||
@@ -595,8 +621,8 @@ export function decodeForecastMap(value: unknown): ForecastMapContract {
     baseline.summary.expectedChangePctAvailableRowCount !== pctAvailable ||
     baseline.summary.zeroBaselineRowCount !== zeroBaseline ||
     baseline.valueAvailability !== expectedAvailability(baselineAvailable, rows.length) ||
-    typeof baseline.sourceFile !== 'string' ||
-    typeof baseline.manifestSourceFile !== 'string'
+    !safeSourceFile(baseline.sourceFile) ||
+    !safeSourceFile(baseline.manifestSourceFile)
   ) {
     throw new Error('Forecast Map baseline summary does not reconcile.')
   }
@@ -661,10 +687,12 @@ export function decodeForecastMap(value: unknown): ForecastMapContract {
   exactKeys(
     model,
     [
+      'artifactGeneratedAtUtc',
       'artifactType',
       'artifactVersion',
       'forecastWeek',
       'historicalError',
+      'independentTrainingTime',
       'leakageControlsVerified',
       'name',
       'pointEstimatesOnly',
@@ -679,17 +707,32 @@ export function decodeForecastMap(value: unknown): ForecastMapContract {
     'model',
   )
   if (
-    typeof model.sourceFile !== 'string' ||
+    !safeSourceFile(model.sourceFile) ||
+    !record(model.independentTrainingTime) ||
     model.pointEstimatesOnly !== true ||
     model.predictionIntervalsAvailable !== false ||
     typeof model.leakageControlsVerified !== 'boolean'
   ) {
     throw new Error('Forecast Map model flags are invalid.')
   }
+  exactKeys(
+    model.independentTrainingTime,
+    ['reason', 'status', 'timestamp'],
+    'independent training time',
+  )
+  if (
+    model.independentTrainingTime.status !== 'unavailable' ||
+    model.independentTrainingTime.timestamp !== null ||
+    model.independentTrainingTime.reason !==
+      'No independent training-completion timestamp is recorded.'
+  ) {
+    throw new Error('Forecast Map independent training-time status is invalid.')
+  }
   if (modelStatus === 'available') {
     if (
       model.artifactType !== 'weekly_forecast_ml_model' ||
       model.artifactVersion !== 1 ||
+      !utcOffsetTimestamp(model.artifactGeneratedAtUtc) ||
       typeof model.name !== 'string' ||
       !integer(model.version) ||
       model.version < 1 ||
@@ -707,6 +750,7 @@ export function decodeForecastMap(value: unknown): ForecastMapContract {
     !model.reason ||
     model.artifactType !== null ||
     model.artifactVersion !== null ||
+    model.artifactGeneratedAtUtc !== null ||
     model.name !== null ||
     model.version !== null ||
     model.forecastWeek !== null ||
@@ -751,10 +795,15 @@ export function decodeForecastMap(value: unknown): ForecastMapContract {
       historical.predictionCoveragePct < 0 ||
       historical.predictionCoveragePct > 100 ||
       !integer(historical.backtestRowCount) ||
+      historical.backtestRowCount < 1 ||
       !isoDate(historical.backtestStartWeek) ||
       !isoDate(historical.backtestEndWeek) ||
+      !monday(historical.backtestStartWeek) ||
+      !monday(historical.backtestEndWeek) ||
+      historical.backtestStartWeek > historical.backtestEndWeek ||
+      historical.backtestStartWeek < firstWeek ||
       historical.backtestEndWeek !== latestComplete ||
-      typeof historical.sourceFile !== 'string' ||
+      !safeSourceFile(historical.sourceFile) ||
       typeof historical.unit !== 'string' ||
       typeof historical.scope !== 'string' ||
       typeof historical.filterSemantics !== 'string'
@@ -766,7 +815,7 @@ export function decodeForecastMap(value: unknown): ForecastMapContract {
     if (
       typeof historical.reason !== 'string' ||
       !historical.reason ||
-      typeof historical.sourceFile !== 'string'
+      !safeSourceFile(historical.sourceFile)
     ) {
       throw new Error('Unavailable Forecast Map historical-error context is invalid.')
     }

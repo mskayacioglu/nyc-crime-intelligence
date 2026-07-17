@@ -34,6 +34,11 @@ NUMERIC_DIGITS = 6
 ARITHMETIC_TOLERANCE = 1e-6
 MODEL_ARTIFACT_TYPE = "weekly_forecast_ml_model"
 BASELINE_ARTIFACT_TYPE = "baseline_forecast_model"
+INDEPENDENT_TRAINING_TIME = {
+    "status": "unavailable",
+    "timestamp": None,
+    "reason": "No independent training-completion timestamp is recorded.",
+}
 EXPECTED_SEGMENT_KEYS = [
     "borough",
     "precinct",
@@ -195,6 +200,13 @@ def required_text(value: Any, label: str) -> str:
     result = value.strip()
     if len(result) > 500 or any(ord(character) < 32 for character in result):
         raise ForecastMapContractError(f"Unsafe text field: {label}.")
+    return result
+
+
+def required_source_filename(value: Any, label: str) -> str:
+    result = required_text(value, label)
+    if Path(result).name != result or "/" in result or "\\" in result:
+        raise ForecastMapContractError(f"Source filename exposes a path: {label}.")
     return result
 
 
@@ -667,6 +679,9 @@ def load_model_manifest(
         artifact_version = required_number(
             manifest.get("artifact_version"), "ML artifact version", minimum=1, integer=True
         )
+        artifact_generated_at = required_timestamp(
+            manifest.get("generated_at_utc"), "ML artifact generated timestamp"
+        )
         if manifest.get("segment_keys") != EXPECTED_SEGMENT_KEYS:
             raise ForecastMapContractError("ML manifest segment keys are incompatible.")
         model = manifest.get("model")
@@ -840,6 +855,7 @@ def load_model_manifest(
             "sourceFile": path.name,
             "artifactType": artifact_type,
             "artifactVersion": int(artifact_version),
+            "artifactGeneratedAtUtc": artifact_generated_at.isoformat(),
             "name": model_name,
             "version": int(model_version),
             "trainingStartWeek": training_min.isoformat(),
@@ -905,6 +921,15 @@ def load_historical_error(
         metric_version = required_number(
             config.get("model_version"), "metrics model version", minimum=1, integer=True
         )
+        metrics_generated_at = required_timestamp(
+            metrics.get("generated_at_utc"), "ML metrics generated timestamp"
+        )
+        if metrics_generated_at != required_timestamp(
+            model.get("artifactGeneratedAtUtc"), "published ML artifact generated timestamp"
+        ):
+            raise ForecastMapContractError(
+                "ML metrics and manifest generation timestamps do not match."
+            )
         metric_week = required_date(
             analysis.get("next_week_forecast_week"), "metrics forecast week"
         )
@@ -1757,6 +1782,8 @@ def build_dashboard_forecast_map(
             "sourceFile": model["sourceFile"],
             "artifactType": model.get("artifactType"),
             "artifactVersion": model.get("artifactVersion"),
+            "artifactGeneratedAtUtc": model.get("artifactGeneratedAtUtc"),
+            "independentTrainingTime": dict(INDEPENDENT_TRAINING_TIME),
             "name": model.get("name"),
             "version": model.get("version"),
             "trainingStartWeek": model.get("trainingStartWeek"),
@@ -2078,6 +2105,7 @@ def validate_forecast_map_payload(payload: dict[str, Any]) -> None:
         raise ForecastMapContractError("Forecast availability status is invalid.")
     if forecast.get("rowColumns") != ROW_COLUMNS:
         raise ForecastMapContractError("Forecast row schema is invalid.")
+    required_source_filename(forecast.get("sourceFile"), "forecast source file")
     rows = forecast.get("rows")
     if not isinstance(rows, list):
         raise ForecastMapContractError("Forecast rows must be a list.")
@@ -2328,6 +2356,10 @@ def validate_forecast_map_payload(payload: dict[str, Any]) -> None:
     baseline = payload["baseline"]
     if not isinstance(baseline, dict) or baseline.get("status") not in OPTIONAL_STATUSES:
         raise ForecastMapContractError("Baseline availability status is invalid.")
+    required_source_filename(baseline.get("sourceFile"), "baseline source file")
+    required_source_filename(
+        baseline.get("manifestSourceFile"), "baseline manifest source file"
+    )
     baseline_summary = baseline.get("summary")
     expected_baseline_summary = {
         "publishedRowCount": len(rows),
@@ -2374,6 +2406,105 @@ def validate_forecast_map_payload(payload: dict[str, Any]) -> None:
     model = payload["model"]
     if not isinstance(model, dict) or model.get("status") not in OPTIONAL_STATUSES:
         raise ForecastMapContractError("Forecast model status is invalid.")
+    expected_model_keys = {
+        "status",
+        "sourceFile",
+        "artifactType",
+        "artifactVersion",
+        "artifactGeneratedAtUtc",
+        "independentTrainingTime",
+        "name",
+        "version",
+        "trainingStartWeek",
+        "trainingThroughWeek",
+        "forecastWeek",
+        "leakageControlsVerified",
+        "pointEstimatesOnly",
+        "predictionIntervalsAvailable",
+        "historicalError",
+    }
+    if model.get("reason") is not None:
+        expected_model_keys.add("reason")
+    if set(model) != expected_model_keys:
+        raise ForecastMapContractError("Forecast model lifecycle schema is invalid.")
+    required_source_filename(model.get("sourceFile"), "model source file")
+    if model.get("independentTrainingTime") != INDEPENDENT_TRAINING_TIME:
+        raise ForecastMapContractError(
+            "Independent training-completion timestamp status is invalid."
+        )
+    if not (
+        model.get("pointEstimatesOnly") is True
+        and model.get("predictionIntervalsAvailable") is False
+    ):
+        raise ForecastMapContractError("Forecast model uncertainty metadata is unsafe.")
+    if model["status"] == "available":
+        if model.get("reason") is not None:
+            raise ForecastMapContractError("Available forecast model has an error reason.")
+        if model.get("artifactType") != MODEL_ARTIFACT_TYPE:
+            raise ForecastMapContractError("Forecast model artifact type is incompatible.")
+        required_number(
+            model.get("artifactVersion"),
+            "published ML artifact version",
+            minimum=1,
+            integer=True,
+        )
+        model_name = required_text(model.get("name"), "published ML model name")
+        if not MODEL_NAME_RE.fullmatch(model_name):
+            raise ForecastMapContractError("Published ML model name is not browser-safe.")
+        required_number(
+            model.get("version"),
+            "published ML model version",
+            minimum=1,
+            integer=True,
+        )
+        training_start = required_date(
+            model.get("trainingStartWeek"), "published ML training start"
+        )
+        training_through = required_date(
+            model.get("trainingThroughWeek"), "published ML training end"
+        )
+        model_forecast_week = required_date(
+            model.get("forecastWeek"), "published ML forecast week"
+        )
+        if not (
+            training_start == first_week
+            and training_through == latest_week
+            and model_forecast_week == latest_week + timedelta(weeks=1)
+        ):
+            raise ForecastMapContractError(
+                "Forecast model lifecycle dates do not match the observation horizon."
+            )
+        artifact_generated = required_timestamp(
+            model.get("artifactGeneratedAtUtc"),
+            "published ML artifact generated timestamp",
+        )
+        if model.get("artifactGeneratedAtUtc") != artifact_generated.isoformat():
+            raise ForecastMapContractError(
+                "Forecast model artifact timestamp is not canonical UTC."
+            )
+        if model.get("leakageControlsVerified") is not True:
+            raise ForecastMapContractError(
+                "Available forecast model lacks verified leakage controls."
+            )
+    else:
+        if not model.get("reason"):
+            raise ForecastMapContractError("Unavailable forecast model requires a reason.")
+        unavailable_fields = (
+            "artifactType",
+            "artifactVersion",
+            "artifactGeneratedAtUtc",
+            "name",
+            "version",
+            "trainingStartWeek",
+            "trainingThroughWeek",
+            "forecastWeek",
+        )
+        if any(model.get(key) is not None for key in unavailable_fields) or (
+            model.get("leakageControlsVerified") is not False
+        ):
+            raise ForecastMapContractError(
+                "Unavailable forecast model publishes lifecycle values."
+            )
     if rows and not (
         model["status"] == "available"
         and model.get("leakageControlsVerified") is True
@@ -2389,7 +2520,26 @@ def validate_forecast_map_payload(payload: dict[str, Any]) -> None:
         "invalid",
     }:
         raise ForecastMapContractError("Historical error context status is invalid.")
+    required_source_filename(
+        historical.get("sourceFile"), "historical error source file"
+    )
     if historical["status"] == "available":
+        expected_historical_keys = {
+            "status",
+            "sourceFile",
+            "mae",
+            "rmse",
+            "weightedMae",
+            "predictionCoveragePct",
+            "backtestRowCount",
+            "backtestStartWeek",
+            "backtestEndWeek",
+            "unit",
+            "scope",
+            "filterSemantics",
+        }
+        if set(historical) != expected_historical_keys:
+            raise ForecastMapContractError("Historical error context schema is invalid.")
         for key in ("mae", "rmse", "predictionCoveragePct"):
             required_number(
                 historical.get(key),
@@ -2398,8 +2548,32 @@ def validate_forecast_map_payload(payload: dict[str, Any]) -> None:
                 maximum=100 if key == "predictionCoveragePct" else None,
             )
         optional_number(historical.get("weightedMae"), "historical weighted MAE", minimum=0)
-    elif not historical.get("reason"):
-        raise ForecastMapContractError("Unavailable historical error context requires a reason.")
+        backtest_rows = required_number(
+            historical.get("backtestRowCount"),
+            "historical backtest row count",
+            minimum=1,
+            integer=True,
+        )
+        backtest_start = required_date(
+            historical.get("backtestStartWeek"), "historical backtest start"
+        )
+        backtest_end = required_date(
+            historical.get("backtestEndWeek"), "historical backtest end"
+        )
+        if (
+            backtest_rows < 1
+            or backtest_start.weekday() != 0
+            or backtest_end.weekday() != 0
+            or not first_week <= backtest_start <= backtest_end
+            or backtest_end != latest_complete
+        ):
+            raise ForecastMapContractError("Historical backtest range is inconsistent.")
+        for key in ("unit", "scope", "filterSemantics"):
+            required_text(historical.get(key), f"historical error {key}")
+    else:
+        if set(historical) != {"status", "sourceFile", "reason"}:
+            raise ForecastMapContractError("Unavailable historical error schema is invalid.")
+        required_text(historical.get("reason"), "unavailable historical error reason")
 
     location = payload["locationKeySemantics"]
     if not isinstance(location, dict) or not (
@@ -2454,9 +2628,7 @@ def validate_forecast_map_payload(payload: dict[str, Any]) -> None:
             raise ForecastMapContractError("Forecast Map provenance entry is malformed.")
         if item["status"] not in OPTIONAL_STATUSES:
             raise ForecastMapContractError("Forecast Map provenance status is invalid.")
-        source_file = required_text(item["sourceFile"], "provenance source file")
-        if Path(source_file).name != source_file or "/" in source_file or "\\" in source_file:
-            raise ForecastMapContractError("Forecast Map provenance exposes a source path.")
+        required_source_filename(item["sourceFile"], "provenance source file")
 
     serialized = json.dumps(payload, allow_nan=False).upper()
     forbidden_tokens = [

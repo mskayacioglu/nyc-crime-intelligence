@@ -95,6 +95,38 @@ export interface VersionRecord {
   [key: string]: unknown
 }
 
+export interface SourceIssueCounts {
+  populationCount: number
+  missingInvalidComplaintStartDate: number
+  implausiblyOldComplaintStartDate: number
+  futureComplaintStartDate: number
+  futureComplaintEndDate: number
+  complaintEndBeforeStart: number
+  reportDateBeforeComplaintStart: number
+  missingBorough: number
+  missingPrecinct: number
+  missingOffense: number
+  missingCoordinates: number
+  zeroCoordinates: number
+  coordinatesOutsideBroadNycBounds: number
+  invalidLawCategory: number
+  rowsWithAnyIssue: number
+  rowsWithMultipleIssues: number
+  maximumIssuesPerRow: number
+  categoriesOverlap: true
+  countsAreNonAdditive: true
+}
+
+export interface AggregateSafeUnknownCounts {
+  populationCount: number
+  borough: number
+  precinct: number
+  offense: number
+  lawCategory: number
+  valuesRetained: true
+  categoriesOverlap: true
+}
+
 export interface OverviewMetadata {
   schemaVersion: string
   generatedAtUtc: string
@@ -129,6 +161,8 @@ export interface OverviewMetadata {
     cleanSourceRowCount: number
     countsReconciled: boolean
     dateBasis: string
+    sourceIssueCounts: SourceIssueCounts
+    aggregateSafeUnknownCounts: AggregateSafeUnknownCounts
     [key: string]: unknown
   }
   observed: {

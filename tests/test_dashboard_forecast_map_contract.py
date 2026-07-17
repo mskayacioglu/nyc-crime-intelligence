@@ -213,6 +213,7 @@ class DashboardForecastMapContractTest(unittest.TestCase):
         paths["manifest"].write_text(
             json.dumps(
                 {
+                    "generated_at_utc": "2024-02-01T12:34:56.123456+00:00",
                     "artifact_type": "weekly_forecast_ml_model",
                     "artifact_version": 1,
                     "segment_keys": [
@@ -258,6 +259,7 @@ class DashboardForecastMapContractTest(unittest.TestCase):
         paths["metrics"].write_text(
             json.dumps(
                 {
+                    "generated_at_utc": "2024-02-01T12:34:56.123456+00:00",
                     "model_config": {
                         "model_name": "fixture_model",
                         "model_version": 1,
@@ -407,6 +409,14 @@ class DashboardForecastMapContractTest(unittest.TestCase):
         self.assertEqual(payload["forecast"]["status"], "available")
         self.assertFalse(payload["forecast"]["isEmpty"])
         self.assertEqual(payload["forecast"]["summary"]["rowCount"], 3)
+        self.assertEqual(
+            payload["model"]["artifactGeneratedAtUtc"],
+            "2024-02-01T12:34:56.123456+00:00",
+        )
+        self.assertEqual(
+            payload["model"]["independentTrainingTime"],
+            build_dashboard_forecast_map.INDEPENDENT_TRAINING_TIME,
+        )
 
         keys = [tuple(row[:5]) for row in payload["forecast"]["rows"]]
         self.assertEqual(keys, sorted(keys))
@@ -524,6 +534,20 @@ class DashboardForecastMapContractTest(unittest.TestCase):
         latest_observed = date.fromisoformat(payload["dataRange"]["latestObservedWeek"])
         self.assertEqual(forecast_week, latest_observed + timedelta(weeks=1))
         self.assertEqual(payload["model"]["forecastWeek"], forecast_week.isoformat())
+        self.assertEqual(
+            payload["model"]["artifactGeneratedAtUtc"],
+            "2026-07-05T12:40:05.068774+00:00",
+        )
+        self.assertEqual(
+            payload["model"]["independentTrainingTime"],
+            {
+                "status": "unavailable",
+                "timestamp": None,
+                "reason": (
+                    "No independent training-completion timestamp is recorded."
+                ),
+            },
+        )
         self.assertEqual(payload, persisted)
         build_dashboard_forecast_map.validate_forecast_map_payload(persisted)
 
@@ -705,6 +729,69 @@ class DashboardForecastMapContractTest(unittest.TestCase):
         self.assertEqual(missing["forecast"]["status"], "invalid")
         self.assertEqual(malformed["model"]["status"], "invalid")
         self.assertEqual(malformed["forecast"]["status"], "invalid")
+
+    def test_manifest_generation_timestamp_is_required_and_strictly_validated(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = self.write_inputs(root / "inputs")
+            cases = {
+                "missing": lambda value: value.pop("generated_at_utc"),
+                "malformed": lambda value: value.update(
+                    {"generated_at_utc": "not-a-timestamp"}
+                ),
+                "missing-offset": lambda value: value.update(
+                    {"generated_at_utc": "2024-02-01T12:34:56"}
+                ),
+            }
+            results = {}
+            for name, mutate in cases.items():
+                manifest = self.json_copy(
+                    paths["manifest"], root / f"{name}-manifest.json", mutate
+                )
+                results[name], _ = self.build(
+                    paths, root / f"{name}.json", manifest=manifest
+                )
+
+        for name, payload in results.items():
+            with self.subTest(name=name):
+                self.assertEqual(payload["model"]["status"], "invalid")
+                self.assertIsNone(payload["model"]["artifactGeneratedAtUtc"])
+                self.assertEqual(
+                    payload["model"]["independentTrainingTime"],
+                    build_dashboard_forecast_map.INDEPENDENT_TRAINING_TIME,
+                )
+                self.assertEqual(payload["forecast"]["status"], "invalid")
+
+    def test_metrics_generation_timestamp_must_match_manifest_exact_instant(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            root = Path(tmp)
+            paths = self.write_inputs(root / "inputs")
+            cases = {
+                "missing": lambda value: value.pop("generated_at_utc"),
+                "malformed": lambda value: value.update(
+                    {"generated_at_utc": "not-a-timestamp"}
+                ),
+                "mismatch": lambda value: value.update(
+                    {"generated_at_utc": "2024-02-01T12:34:57.123456+00:00"}
+                ),
+            }
+            results = {}
+            for name, mutate in cases.items():
+                metrics = self.json_copy(
+                    paths["metrics"], root / f"{name}-metrics.json", mutate
+                )
+                results[name], _ = self.build(
+                    paths, root / f"{name}.json", metrics=metrics
+                )
+
+        for name, payload in results.items():
+            with self.subTest(name=name):
+                self.assertEqual(payload["model"]["status"], "available")
+                self.assertEqual(payload["forecast"]["status"], "available")
+                self.assertEqual(
+                    payload["model"]["historicalError"]["status"], "invalid"
+                )
+                self.assertTrue(payload["model"]["historicalError"]["reason"])
 
     def test_metrics_mismatch_withholds_error_context_not_point_estimates(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
@@ -1007,6 +1094,40 @@ class DashboardForecastMapContractTest(unittest.TestCase):
         cases["ethics-unsafe"]["ethics"]["patrolRecommendations"] = True
         cases["event-field"] = copy.deepcopy(payload)
         cases["event-field"]["limitations"].append("complaint_number")
+        cases["noncanonical-artifact-timestamp"] = copy.deepcopy(payload)
+        cases["noncanonical-artifact-timestamp"]["model"][
+            "artifactGeneratedAtUtc"
+        ] = "2024-02-01T12:34:56.123456Z"
+        cases["fabricated-training-time"] = copy.deepcopy(payload)
+        cases["fabricated-training-time"]["model"]["independentTrainingTime"] = {
+            "status": "available",
+            "timestamp": "2024-02-01T12:00:00+00:00",
+            "reason": None,
+        }
+        cases["zero-backtest-rows"] = copy.deepcopy(payload)
+        cases["zero-backtest-rows"]["model"]["historicalError"][
+            "backtestRowCount"
+        ] = 0
+        cases["reversed-backtest-range"] = copy.deepcopy(payload)
+        cases["reversed-backtest-range"]["model"]["historicalError"].update(
+            {
+                "backtestStartWeek": "2024-01-15",
+                "backtestEndWeek": "2024-01-08",
+            }
+        )
+        for field, path in (
+            (("forecast", "sourceFile"), "/Users/example/private/forecast.parquet"),
+            (("baseline", "sourceFile"), "/Users/example/private/baseline.parquet"),
+            (("baseline", "manifestSourceFile"), "/Users/example/private/manifest.json"),
+            (("model", "sourceFile"), "/Users/example/private/model.json"),
+            (("historicalError", "sourceFile"), "/Users/example/private/metrics.json"),
+        ):
+            changed = copy.deepcopy(payload)
+            if field[0] == "historicalError":
+                changed["model"]["historicalError"][field[1]] = path
+            else:
+                changed[field[0]][field[1]] = path
+            cases[f"absolute-{field[0]}-{field[1]}"] = changed
 
         for name, changed in cases.items():
             with self.subTest(name=name):

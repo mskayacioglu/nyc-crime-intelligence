@@ -45,6 +45,12 @@ export interface ForecastMapContract {
     reason?: string
     artifactType: 'weekly_forecast_ml_model' | null
     artifactVersion: 1 | null
+    artifactGeneratedAtUtc: string | null
+    independentTrainingTime: {
+      status: 'unavailable'
+      timestamp: null
+      reason: string
+    }
     name: string | null
     version: number | null
     forecastWeek: string | null

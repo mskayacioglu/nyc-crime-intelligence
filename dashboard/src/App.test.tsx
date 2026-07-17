@@ -23,17 +23,35 @@ vi.mock('./components/AnomaliesView', () => ({
   ),
 }))
 
+vi.mock('./components/GovernanceView', () => ({
+  default: ({
+    metadata,
+  }: {
+    metadata: { dataRange: { safeEventEndDate: string } }
+  }) => (
+    <main id="main-content">
+      <h2>Governance View</h2>
+      <p data-testid="governance-data-through">
+        {metadata.dataRange.safeEventEndDate}
+      </p>
+    </main>
+  ),
+}))
+
 describe('Dashboard view navigation', () => {
   it('opens the Map from Overview and returns without changing the default screen', async () => {
-    const user = userEvent.setup()
     render(<App loader={async () => overviewFixture()} />)
 
     expect(await screen.findByTestId('selected-total')).toHaveTextContent('171')
+    const navigation = screen.getByRole('navigation', { name: 'Dashboard views' })
+    expect(
+      within(navigation).getAllByRole('button').map((button) => button.textContent?.trim()),
+    ).toEqual(['Overview', 'Map & hotspots', 'Anomalies', 'Governance'])
     expect(
       screen.getByRole('button', { name: 'Overview' }),
     ).toHaveAttribute('aria-current', 'page')
 
-    await user.click(screen.getByRole('button', { name: 'Map & hotspots' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Map & hotspots' }))
     expect(
       await screen.findByRole('heading', { name: 'Map and Hotspot View' }),
     ).toBeInTheDocument()
@@ -41,17 +59,16 @@ describe('Dashboard view navigation', () => {
       screen.getByRole('button', { name: 'Map & hotspots' }),
     ).toHaveAttribute('aria-current', 'page')
 
-    await user.click(screen.getByRole('button', { name: 'Overview' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Overview' }))
     expect(await screen.findByTestId('selected-total')).toHaveTextContent('171')
   })
 
   it('opens the lazy Anomalies view with the shared filter scope', async () => {
-    const user = userEvent.setup()
     render(<App loader={async () => overviewFixture()} />)
     await screen.findByTestId('selected-total')
 
-    await user.selectOptions(screen.getByLabelText('Borough'), '0')
-    await user.click(screen.getByRole('button', { name: 'Anomalies' }))
+    fireEvent.change(screen.getByLabelText('Borough'), { target: { value: '0' } })
+    fireEvent.click(screen.getByRole('button', { name: 'Anomalies' }))
 
     expect(
       await screen.findByRole('heading', { name: 'Anomalies View' }),
@@ -63,8 +80,93 @@ describe('Dashboard view navigation', () => {
     )
     expect(screen.getByRole('link', { name: 'Skip to Anomalies' })).toBeInTheDocument()
 
-    await user.click(screen.getByRole('button', { name: 'Overview' }))
+    fireEvent.click(screen.getByRole('button', { name: 'Overview' }))
     expect(screen.getByLabelText('Borough')).toHaveValue('0')
+  })
+
+  it('uses native Governance navigation, keeps focus, and synchronizes the skip link', async () => {
+    const user = userEvent.setup()
+    render(<App loader={async () => overviewFixture()} />)
+    await screen.findByTestId('selected-total')
+
+    const governance = screen.getByRole('button', { name: 'Governance' })
+    governance.focus()
+    await user.keyboard('{Enter}')
+
+    expect(
+      await screen.findByRole('heading', { name: 'Governance View' }),
+    ).toBeInTheDocument()
+    expect(governance).toHaveFocus()
+    expect(governance).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('button', { name: 'Overview' })).not.toHaveAttribute(
+      'aria-current',
+    )
+    expect(screen.getByRole('link', { name: 'Skip to Governance' })).toHaveAttribute(
+      'href',
+      '#main-content',
+    )
+    expect(screen.getByTestId('governance-data-through')).toHaveTextContent(
+      '2025-03-10',
+    )
+    expect(screen.queryByRole('heading', { name: 'Filters' })).not.toBeInTheDocument()
+    expect(screen.queryByLabelText('Borough')).not.toBeInTheDocument()
+
+    const overview = screen.getByRole('button', { name: 'Overview' })
+    overview.focus()
+    await user.keyboard(' ')
+
+    expect(await screen.findByTestId('selected-total')).toHaveTextContent('171')
+    expect(overview).toHaveFocus()
+    expect(overview).toHaveAttribute('aria-current', 'page')
+    expect(screen.getByRole('link', { name: 'Skip to Overview' })).toBeInTheDocument()
+  })
+
+  it('preserves exact global filters through Governance and retains constraints and Reset', async () => {
+    render(<App loader={async () => overviewFixture()} />)
+    await screen.findByTestId('selected-total')
+
+    fireEvent.input(screen.getByLabelText('Start week'), {
+      target: { value: '2025-01-13' },
+    })
+    fireEvent.input(screen.getByLabelText('End week'), {
+      target: { value: '2025-02-24' },
+    })
+    fireEvent.change(screen.getByLabelText('Borough'), { target: { value: '1' } })
+    fireEvent.change(screen.getByLabelText('Precinct'), { target: { value: '1' } })
+    fireEvent.change(screen.getByLabelText('Offense type'), { target: { value: '1' } })
+    fireEvent.change(screen.getByLabelText('Law category'), { target: { value: '1' } })
+
+    expect(screen.getByLabelText('Start week')).toHaveValue('2025-01-13')
+    expect(screen.getByLabelText('End week')).toHaveValue('2025-02-24')
+    expect(screen.getByLabelText('Borough')).toHaveValue('1')
+    expect(screen.getByLabelText('Precinct')).toHaveValue('1')
+    expect(screen.getByLabelText('Offense type')).toHaveValue('1')
+    expect(screen.getByLabelText('Law category')).toHaveValue('1')
+
+    fireEvent.click(screen.getByRole('button', { name: 'Governance' }))
+    await screen.findByRole('heading', { name: 'Governance View' })
+    expect(screen.queryByLabelText('Borough')).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Overview' }))
+    expect(await screen.findByLabelText('Start week')).toHaveValue('2025-01-13')
+    expect(screen.getByLabelText('End week')).toHaveValue('2025-02-24')
+    expect(screen.getByLabelText('Borough')).toHaveValue('1')
+    expect(screen.getByLabelText('Precinct')).toHaveValue('1')
+    expect(screen.getByLabelText('Offense type')).toHaveValue('1')
+    expect(screen.getByLabelText('Law category')).toHaveValue('1')
+
+    const precinct = screen.getByLabelText('Precinct')
+    fireEvent.change(screen.getByLabelText('Borough'), { target: { value: '0' } })
+    expect(precinct).toHaveValue('')
+    expect(within(precinct).queryByRole('option', { name: '2' })).not.toBeInTheDocument()
+
+    fireEvent.click(screen.getByRole('button', { name: 'Reset' }))
+    expect(screen.getByLabelText('Start week')).toHaveValue('2025-01-06')
+    expect(screen.getByLabelText('End week')).toHaveValue('2025-03-03')
+    expect(screen.getByLabelText('Borough')).toHaveValue('')
+    expect(screen.getByLabelText('Precinct')).toHaveValue('')
+    expect(screen.getByLabelText('Offense type')).toHaveValue('')
+    expect(screen.getByLabelText('Law category')).toHaveValue('')
   })
 })
 
@@ -82,7 +184,11 @@ describe('Overview application states', () => {
     const user = userEvent.setup()
     render(<App loader={loader} />)
 
-    expect(await screen.findByRole('alert')).toHaveTextContent('Data unavailable')
+    const alert = await screen.findByRole('alert')
+    expect(alert).toHaveTextContent('Data unavailable')
+    expect(alert).toHaveTextContent(
+      /required core Overview metadata or aggregate cube is missing, inaccessible, or invalid/i,
+    )
     expect(screen.queryByText(/secret stack detail/i)).not.toBeInTheDocument()
     await user.click(screen.getByRole('button', { name: 'Retry' }))
     await waitFor(() => expect(loader).toHaveBeenCalledTimes(2))

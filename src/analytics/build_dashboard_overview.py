@@ -56,7 +56,35 @@ SENSITIVE_COLUMNS = [
     "VIC_SEX",
 ]
 
-CLEAN_REQUIRED_COLUMNS = ["complaint_from_date", "is_clean_event_for_aggregate"]
+QUALITY_FLAG_FIELDS = {
+    "missingInvalidComplaintStartDate": "flag_missing_invalid_complaint_start_date",
+    "implausiblyOldComplaintStartDate": "flag_implausibly_old_complaint_start_date",
+    "futureComplaintStartDate": "flag_future_complaint_start_date",
+    "futureComplaintEndDate": "flag_future_complaint_end_date",
+    "complaintEndBeforeStart": "flag_complaint_end_before_start",
+    "reportDateBeforeComplaintStart": "flag_report_date_before_complaint_start",
+    "missingBorough": "flag_missing_borough",
+    "missingPrecinct": "flag_missing_precinct",
+    "missingOffense": "flag_missing_offense",
+    "missingCoordinates": "flag_missing_coordinates",
+    "zeroCoordinates": "flag_zero_coordinates",
+    "coordinatesOutsideBroadNycBounds": (
+        "flag_coordinates_outside_broad_nyc_bounds"
+    ),
+    "invalidLawCategory": "flag_invalid_law_category",
+}
+CLEAN_DIMENSION_FIELDS = {
+    "borough": "borough",
+    "precinct": "precinct",
+    "offense": "offense_type",
+    "lawCategory": "law_category",
+}
+CLEAN_REQUIRED_COLUMNS = [
+    "complaint_from_date",
+    "is_clean_event_for_aggregate",
+    *CLEAN_DIMENSION_FIELDS.values(),
+    *QUALITY_FLAG_FIELDS.values(),
+]
 WEEKLY_REQUIRED_COLUMNS = [
     "week_start",
     "borough",
@@ -1194,7 +1222,125 @@ def gate_anomalies_with_metrics(
     return anomalies
 
 
+def clean_data_quality_stats(con: Any, clean_path: Path) -> dict[str, Any]:
+    """Return deterministic, aggregate-safe quality metadata for publication."""
+    types = parquet_column_types(con, clean_path)
+    if types.get("complaint_from_date") != "DATE":
+        raise ValueError("Clean complaint_from_date must be DATE.")
+    if types.get("is_clean_event_for_aggregate") != "BOOLEAN":
+        raise ValueError("Clean aggregate eligibility must be BOOLEAN.")
+    malformed_flags = sorted(
+        column
+        for column in QUALITY_FLAG_FIELDS.values()
+        if types.get(column) != "BOOLEAN"
+    )
+    if malformed_flags:
+        raise ValueError(
+            "Clean quality flags must be BOOLEAN: " + ", ".join(malformed_flags)
+        )
+
+    issue_expression = " + ".join(
+        f"CAST({column} AS INTEGER)" for column in QUALITY_FLAG_FIELDS.values()
+    )
+    issue_columns = ",\n            ".join(
+        f"COUNT(*) FILTER (WHERE {column})::BIGINT AS {output_key}"
+        for output_key, column in QUALITY_FLAG_FIELDS.items()
+    )
+    unknown_columns = ",\n            ".join(
+        (
+            "COUNT(*) FILTER (WHERE is_clean_event_for_aggregate IS TRUE "
+            f"AND {column} IS NULL)::BIGINT AS unknown_{output_key}"
+        )
+        for output_key, column in CLEAN_DIMENSION_FIELDS.items()
+    )
+    stats = fetch_dicts(
+        con,
+        f"""
+        SELECT
+            COUNT(*)::BIGINT AS population_count,
+            COUNT(*) FILTER (
+                WHERE is_clean_event_for_aggregate IS NULL
+            )::BIGINT AS null_aggregate_eligibility_rows,
+            COUNT(*) FILTER (
+                WHERE {' OR '.join(f'{column} IS NULL' for column in QUALITY_FLAG_FIELDS.values())}
+            )::BIGINT AS null_quality_flag_rows,
+            {issue_columns},
+            COUNT(*) FILTER (WHERE ({issue_expression}) > 0)::BIGINT
+                AS rows_with_any_issue,
+            COUNT(*) FILTER (WHERE ({issue_expression}) > 1)::BIGINT
+                AS rows_with_multiple_issues,
+            COALESCE(MAX({issue_expression}), 0)::INTEGER AS maximum_issues_per_row,
+            {unknown_columns}
+        FROM read_parquet({sql_string(clean_path)})
+        """,
+    )[0]
+    if stats["null_aggregate_eligibility_rows"]:
+        raise ValueError("Clean aggregate eligibility contains null values.")
+    if stats["null_quality_flag_rows"]:
+        raise ValueError("Clean quality flags contain null values.")
+
+    population_count = int(stats["population_count"])
+    issue_counts = {
+        output_key: int(stats[output_key]) for output_key in QUALITY_FLAG_FIELDS
+    }
+    rows_with_any_issue = int(stats["rows_with_any_issue"])
+    rows_with_multiple_issues = int(stats["rows_with_multiple_issues"])
+    maximum_issues_per_row = int(stats["maximum_issues_per_row"])
+    if (
+        any(count < 0 or count > population_count for count in issue_counts.values())
+        or not 0 <= rows_with_multiple_issues <= rows_with_any_issue <= population_count
+        or not 0 <= maximum_issues_per_row <= len(QUALITY_FLAG_FIELDS)
+        or (rows_with_any_issue == 0 and maximum_issues_per_row != 0)
+        or (rows_with_any_issue > 0 and maximum_issues_per_row < 1)
+        or (rows_with_multiple_issues > 0 and maximum_issues_per_row < 2)
+        or sum(issue_counts.values()) < rows_with_any_issue
+    ):
+        raise ValueError("Clean source issue counts are internally inconsistent.")
+
+    source_issue_counts = {
+        "populationCount": population_count,
+        **issue_counts,
+        "rowsWithAnyIssue": rows_with_any_issue,
+        "rowsWithMultipleIssues": rows_with_multiple_issues,
+        "maximumIssuesPerRow": maximum_issues_per_row,
+        "categoriesOverlap": True,
+        "countsAreNonAdditive": True,
+    }
+    aggregate_safe_unknown_counts = {
+        "populationCount": None,
+        **{
+            output_key: int(stats[f"unknown_{output_key}"])
+            for output_key in CLEAN_DIMENSION_FIELDS
+        },
+        "valuesRetained": True,
+        "categoriesOverlap": True,
+    }
+    return {
+        "sourceIssueCounts": source_issue_counts,
+        "aggregateSafeUnknownCounts": aggregate_safe_unknown_counts,
+    }
+
+
+def weekly_unknown_counts(con: Any, weekly_path: Path) -> dict[str, int]:
+    columns = ",\n            ".join(
+        (
+            "COALESCE(SUM(crime_count) FILTER (WHERE "
+            f"CAST({column} AS VARCHAR) = 'UNKNOWN'), 0)::HUGEINT AS {output_key}"
+        )
+        for output_key, column in CLEAN_DIMENSION_FIELDS.items()
+    )
+    row = fetch_dicts(
+        con,
+        f"""
+        SELECT {columns}
+        FROM read_parquet({sql_string(weekly_path)})
+        """,
+    )[0]
+    return {key: int(row[key]) for key in CLEAN_DIMENSION_FIELDS}
+
+
 def mandatory_stats(con: Any, clean_path: Path, weekly_path: Path) -> dict[str, Any]:
+    quality = clean_data_quality_stats(con, clean_path)
     clean = fetch_dicts(
         con,
         f"""
@@ -1242,6 +1388,19 @@ def mandatory_stats(con: Any, clean_path: Path, weekly_path: Path) -> dict[str, 
             "Aggregate-safe cleaned event count does not reconcile to the weekly "
             f"aggregate sum ({clean['safe_rows']} != {weekly['aggregate_count']})."
         )
+    quality["aggregateSafeUnknownCounts"]["populationCount"] = int(
+        clean["safe_rows"]
+    )
+    unknown_counts = {
+        key: quality["aggregateSafeUnknownCounts"][key]
+        for key in CLEAN_DIMENSION_FIELDS
+    }
+    weekly_unknown = weekly_unknown_counts(con, weekly_path)
+    if unknown_counts != weekly_unknown:
+        raise ValueError(
+            "Aggregate-safe UNKNOWN dimension counts do not reconcile to the weekly "
+            "literal UNKNOWN totals."
+        )
     return {
         "cleanSourceRows": int(clean["source_rows"]),
         "safeEventCount": int(clean["safe_rows"]),
@@ -1251,6 +1410,7 @@ def mandatory_stats(con: Any, clean_path: Path, weekly_path: Path) -> dict[str, 
         "weeklyAggregateCount": int(weekly["aggregate_count"]),
         "firstWeek": weekly["min_week"],
         "lastWeek": weekly["max_week"],
+        **quality,
     }
 
 
@@ -1889,6 +2049,8 @@ def build_dashboard_overview(
             "cleanSourceRowCount": stats["cleanSourceRows"],
             "aggregateSafeEventCount": stats["safeEventCount"],
             "excludedEventCount": stats["cleanSourceRows"] - stats["safeEventCount"],
+            "sourceIssueCounts": stats["sourceIssueCounts"],
+            "aggregateSafeUnknownCounts": stats["aggregateSafeUnknownCounts"],
             "weeklySourceRowCount": stats["weeklySourceRows"],
             "weeklyAggregateCount": stats["weeklyAggregateCount"],
             "countsReconciled": stats["safeEventCount"] == stats["weeklyAggregateCount"],
@@ -1991,6 +2153,81 @@ def validate_overview_payload(payload: dict[str, Any]) -> None:
         raise ValueError("Cube uncompressed byte length does not match its columns.")
     if payload["observed"]["safeEventCount"] != payload["observed"]["weeklyAggregateCount"]:
         raise ValueError("Observed event and weekly aggregate counts do not reconcile.")
+    data_quality = payload["dataQuality"]
+    source_issue_counts = data_quality.get("sourceIssueCounts")
+    expected_source_issue_keys = {
+        "populationCount",
+        *QUALITY_FLAG_FIELDS,
+        "rowsWithAnyIssue",
+        "rowsWithMultipleIssues",
+        "maximumIssuesPerRow",
+        "categoriesOverlap",
+        "countsAreNonAdditive",
+    }
+    if (
+        not isinstance(source_issue_counts, dict)
+        or set(source_issue_counts) != expected_source_issue_keys
+        or source_issue_counts.get("categoriesOverlap") is not True
+        or source_issue_counts.get("countsAreNonAdditive") is not True
+    ):
+        raise ValueError("Overview source issue-count schema is invalid.")
+    source_population = source_issue_counts["populationCount"]
+    rows_with_any_issue = source_issue_counts["rowsWithAnyIssue"]
+    rows_with_multiple_issues = source_issue_counts["rowsWithMultipleIssues"]
+    maximum_issues_per_row = source_issue_counts["maximumIssuesPerRow"]
+    issue_values = [source_issue_counts[key] for key in QUALITY_FLAG_FIELDS]
+    integer_values = [
+        source_population,
+        rows_with_any_issue,
+        rows_with_multiple_issues,
+        maximum_issues_per_row,
+        *issue_values,
+    ]
+    if (
+        any(
+            isinstance(value, bool) or not isinstance(value, int) or value < 0
+            for value in integer_values
+        )
+        or source_population != data_quality.get("cleanSourceRowCount")
+        or not 0 <= rows_with_multiple_issues <= rows_with_any_issue <= source_population
+        or maximum_issues_per_row > len(QUALITY_FLAG_FIELDS)
+        or any(value > source_population for value in issue_values)
+        or sum(issue_values) < rows_with_any_issue
+        or (rows_with_any_issue == 0 and maximum_issues_per_row != 0)
+        or (rows_with_any_issue > 0 and maximum_issues_per_row < 1)
+        or (rows_with_multiple_issues > 0 and maximum_issues_per_row < 2)
+    ):
+        raise ValueError("Overview source issue counts are inconsistent.")
+
+    unknown_counts = data_quality.get("aggregateSafeUnknownCounts")
+    expected_unknown_keys = {
+        "populationCount",
+        *CLEAN_DIMENSION_FIELDS,
+        "valuesRetained",
+        "categoriesOverlap",
+    }
+    if (
+        not isinstance(unknown_counts, dict)
+        or set(unknown_counts) != expected_unknown_keys
+        or unknown_counts.get("valuesRetained") is not True
+        or unknown_counts.get("categoriesOverlap") is not True
+    ):
+        raise ValueError("Overview aggregate-safe UNKNOWN-count schema is invalid.")
+    unknown_population = unknown_counts["populationCount"]
+    unknown_values = [unknown_counts[key] for key in CLEAN_DIMENSION_FIELDS]
+    if (
+        isinstance(unknown_population, bool)
+        or not isinstance(unknown_population, int)
+        or unknown_population < 0
+        or unknown_population != data_quality.get("aggregateSafeEventCount")
+        or any(
+            isinstance(value, bool)
+            or not isinstance(value, int)
+            or not 0 <= value <= unknown_population
+            for value in unknown_values
+        )
+    ):
+        raise ValueError("Overview aggregate-safe UNKNOWN counts are inconsistent.")
     for family in ("anomalies", "hotspots", "forecast"):
         signal = payload["signals"].get(family)
         allowed_statuses = (
@@ -2025,6 +2262,14 @@ def validate_overview_payload(payload: dict[str, Any]) -> None:
     leaked = [column for column in SENSITIVE_COLUMNS if column in serialized]
     if leaked:
         raise ValueError(f"Sensitive demographic fields leaked into Overview payload: {leaked}")
+    for forbidden in (
+        "COMPLAINT_NUMBER",
+        "SOURCE_ROW_ID",
+        "/USERS/",
+        "/CONTENT/",
+    ):
+        if forbidden in serialized:
+            raise ValueError(f"Unsafe source metadata leaked into Overview payload: {forbidden}")
 
 
 def decode_cube(payload: dict[str, Any], compressed_bytes: bytes) -> dict[str, list[int]]:

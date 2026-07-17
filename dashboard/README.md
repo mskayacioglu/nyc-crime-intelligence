@@ -1,7 +1,7 @@
 # NYC Crime Intelligence Dashboard
 
-The dashboard provides aggregate-only Overview, Hotspot, Predictive Map, and
-Anomalies experiences:
+The dashboard provides aggregate-only Overview, Hotspot, Predictive Map,
+Anomalies, and Governance experiences:
 
 - **Overview** remains the first screen and reads compact metadata plus the
   gzip-compressed weekly aggregate cube.
@@ -12,6 +12,9 @@ Anomalies experiences:
 - **Anomalies** reads the already-established Overview anomaly signal and shows
   unusually high observed weekly aggregate increases against their documented
   historical expectation.
+- **Governance** lazily reconciles the existing published contracts into a
+  dedicated non-chart account of data coverage, missing-data warnings, model
+  identity and lifecycle, artifact readiness, and responsible-use limits.
 
 The browser never receives complaint-level records, complaint identifiers,
 victim or suspect demographics, person-level scores, or recommendations about
@@ -27,6 +30,62 @@ The Vite, React, and TypeScript project loads or stages these frontend-safe outp
 - `public/data/forecast-map.json` (runtime-validated with `cache: 'no-cache'`)
 - `public/data/precinct-spatial-reference.json` (runtime-validated with
   `cache: 'no-cache'`)
+
+Governance introduces no parallel browser artifact. It projects only
+allowlisted, aggregate-safe fields from the existing Overview, Map, Forecast
+Map, and precinct-spatial contracts. The Overview build now deterministically
+publishes source-level cleaning issue counts and aggregate-safe literal
+`UNKNOWN` counts. The Forecast Map build publishes the model artifact-generation
+timestamp separately from an explicit unavailable independent training time.
+Both builders continue to write their established canonical and public copies.
+
+The Governance runtime decoder fails closed on malformed identity, version,
+date, timestamp, range, count, finite metric, privacy, ethics, availability, or
+reason fields. It also reconciles event and weekly coverage, row populations,
+model identity and version, training window, fixed forecast horizon, historical
+validation context, Map coverage, and spatial Forecast keys across contracts.
+Absolute paths, unsafe source names, contradictory status/row combinations,
+non-finite values, and unreviewed extra quality fields are rejected rather than
+rendered. Optional artifact failures are sanitized and remain independent; an
+unavailable Forecast, Hotspot, Expected change, or spatial source is never
+converted into an empty row, a numeric zero, or an all-systems-healthy label.
+
+### Governance contract semantics
+
+The coverage contract distinguishes event dates from Monday-starting bucket
+dates. Events cover 2006-01-01 through 2025-12-31, while weekly buckets cover
+2005-12-26 through 2025-12-29. The earlier bucket contains the first event on
+2006-01-01; it does not claim an earlier event. The latest complete bucket begins
+2025-12-22, and the bucket beginning 2025-12-29 is explicitly partial. Source,
+included aggregate-safe, and excluded populations are respectively 10,071,507,
+10,049,687, and 21,820 rows.
+
+Source-level quality flags and aggregate-safe retained `UNKNOWN` values are
+different populations. Source examples include missing offense 18,907, borough
+10,078, precinct 771, missing/invalid start date 655, missing coordinates 479,
+zero coordinates 25, and out-of-bounds coordinates 33. The corresponding
+aggregate-safe retained dimensions include borough 10,065, precinct 713,
+offense 18,847, and law category 0. Source issue categories overlap: 52,050 rows
+have at least one flag and 605 have more than one, so flags must not be summed or
+equated with excluded rows. A verified zero remains zero; unavailable values do
+not become zero.
+
+The model identity is `duckdb_lag_ensemble_regressor`, model version 1, artifact
+version 1. Its data window is 2005-12-26 through 2025-12-29, its artifact was
+generated at `2026-07-05T12:40:05.068774+00:00`, and its fixed forecast week is
+2026-01-05. There is no independently recorded training-completion timestamp,
+so Governance shows **Not independently recorded** and never relabels artifact
+generation as “last trained.” Overall MAE, RMSE, weighted MAE, and coverage are
+historical validation context, not filter-specific errors or uncertainty
+intervals. The published forecast remains a fixed repository/demo point
+estimate, not a live or real-time operational forecast.
+
+Governance separately labels the training-data horizon, artifact generation,
+fixed forecast horizon, event coverage, latest complete and partial buckets,
+contract-derived data timestamp, spatial retrieval and portal-update
+timestamps, and current viewer clock. The viewer clock is used only for the
+already-documented spatial TTL. No general retraining cadence, drift SLA,
+model-age threshold, or universal wall-clock staleness rule is inferred.
 
 Anomalies adds no parallel frontend artifact. The dedicated view lazily decodes
 `signals.anomalies` from `overview.json`, whose source is the established
@@ -96,11 +155,12 @@ fill opacity plus distinct dashed-outline semantics described in the legend.
 
 The Phase 7A observed-count cube and core Overview metrics remain unchanged.
 The Anomalies increment strengthens the optional anomaly family inside the
-existing Overview schema and regenerates its JSON metadata. Phase 7B uses a
-separate deterministic `map.json` contract so fixed-snapshot hotspot semantics
-do not become entangled with the weekly observed-count cube. Leaflet is loaded
-directly and lazily only after the user opens the Map view; no React map wrapper
-is required.
+existing Overview schema, and Governance adds deterministic aggregate-quality
+metadata to that same contract rather than creating another artifact. Phase 7B
+uses a separate deterministic `map.json` contract so fixed-snapshot hotspot
+semantics do not become entangled with the weekly observed-count cube. Leaflet
+is loaded directly and lazily only after the user opens the Map view; no React
+map wrapper is required.
 
 ## Interface hierarchy and visual system
 
@@ -114,14 +174,17 @@ complete result register beside a synchronized detail pane so every published
 signal remains available without a chart or map.
 
 Repeated methodology and responsible-use copy was removed from the primary
-workspace. Phase names, contract and artifact versions, source filenames,
-generation timestamps, and readiness status are not rendered in the product UI.
-An initially collapsed **About the data** disclosure retains only coverage,
-quality counts, forecast interpretation, and concise analytical limits. The Map
-uses one similarly compact **About hotspots** disclosure. Critical date
-semantics, stale or incompatible data, historical-snapshot behavior, active
-filters, and data-quality warnings remain visible when relevant. One persistent
-responsible-use boundary remains in the shell.
+filter-aware workspace. Phase names, raw source filenames, unrestricted
+manifest fields, and development metadata are not rendered there. Overview's
+initially collapsed **About the data** disclosure retains only coverage, quality
+counts, forecast interpretation, and concise analytical limits. The dedicated
+Governance view instead centralizes the allowlisted product-facing model
+identity/version, artifact timestamp, readiness labels, quality warnings, and
+limitations without repopulating Overview. The Map uses one similarly compact
+**About hotspots** disclosure. Critical date semantics, stale or incompatible
+data, historical-snapshot behavior, active filters, and data-quality warnings
+remain visible when relevant. One persistent responsible-use boundary remains
+in the shell.
 
 The original civic visual system uses a near-black architectural field, cold
 blue and ice-white analytical light, smoked-glass panes, dark-steel frames, and
@@ -151,6 +214,10 @@ is retained.
 - The Anomalies register uses native buttons with `aria-pressed`; visible
   selection, the polite live detail, and the deterministic first matching row
   share one selected identity. No custom keyboard handler is used.
+- Governance uses native navigation and `details`/`summary`, semantic headings
+  and description lists, visible textual status labels, long-value wrapping,
+  and no global filter toolbar. Its four mobile navigation items form a readable
+  two-by-two grid while preserving App-owned filter state for the return trip.
 - Severity is encoded with text and shape as well as color. Touch controls use
   a 44 px minimum target.
 - Translucent panes retain structural borders without blur, and a solid-color
@@ -230,6 +297,15 @@ The Overview build continues to write:
 - `dashboard/public/data/overview.json`
 - `dashboard/public/data/overview-cube.bin.gz`
 
+For Governance, the Overview build derives quality metadata directly from the
+established cleaned complaint parquet and aggregate-safe weekly output. The
+Forecast Map build projects only allowlisted lifecycle and historical-validation
+metadata from the existing forecast, metrics, and manifest inputs. Neither
+builder retrains a model. Do not hand-edit staged JSON, infer a missing training
+timestamp, or substitute build time/current time for source-derived time. After
+refreshing, verify byte equality between each canonical artifact and its public
+copy before running the frontend checks.
+
 `build_anomalies.py` deterministically derives aggregate-only
 `data/processed/anomalies.parquet` and `anomaly_metrics.json` from the validated
 weekly-area output and the established safe historical backtest predictions.
@@ -270,6 +346,10 @@ Open the URL printed by Vite. Overview is the default application view. Use
 **Anomalies** for the observed-deviation register, or use **Map & hotspots** and
 then choose **Forecast** or **Expected change** above the workspace. The
 verified polygons load on first entry into a predictive mode.
+Use **Governance** for dataset/model-wide coverage, quality, lifecycle,
+readiness, and responsible-use information. Governance intentionally hides the
+global filter toolbar; the selections remain preserved for the return to a
+filter-aware view.
 Use the shared filters and select a precinct through either its polygon or the
 keyboard-operable list; both update the same detail and model context. The list
 remains the complete non-map path. In Anomalies, select any native result button
@@ -310,6 +390,16 @@ Anomalies, also check signed deviation and direction text, reference-source and
 severity agreement, native result selection, list/detail/`aria-pressed`
 synchronization, source-empty versus filtered-empty, and valid-zero reference
 presentation.
+For Governance, check the exact event and bucket ranges, complete/partial-week
+warning, source and aggregate-safe populations, overlapping issue disclosure,
+retained `UNKNOWN` counts, model/training/artifact/forecast timestamp
+distinctions, overall-versus-filter-specific validation wording, point-estimate
+limitation, independent artifact statuses, responsible-use boundaries, native
+disclosure, filter-state round trip, two-by-two mobile navigation, 44 px targets,
+long-value wrapping, page overflow, console output, and observed required data
+resources. Loading, invalid, incompatible, optional-unavailable, and retry states
+also have focused automated coverage; do not create temporary production
+switches merely to force a browser-visible delay or failure.
 
 ### Redesign verification
 
@@ -418,6 +508,50 @@ activation to the application. No custom keyboard handler or alternate browser
 surface was used. Native-button Enter/Space behavior and selection/detail
 synchronization pass in Vitest. This recorded browser-channel limitation does
 not change or close the separate Phase 7C.3 verification blocker below.
+
+### Governance increment verification
+
+The final Governance-focused frontend pass completed 88 tests in five files,
+and the full dashboard pass completed all 212 Vitest tests in 15 files. The five
+requested focused Overview, Forecast Map, cleaning, ML forecast, and baseline
+forecast Python suites completed 59 tests; full contract discovery completed all
+99 tests. ESLint, TypeScript compilation, the 2,365-module production build,
+`git diff --check`, and the zero-vulnerability production audit passed.
+
+The final build reports 39.61 / 10.26 kB for lazy Governance JavaScript,
+66.39 / 11.33 kB for main CSS, 190.13 / 54.23 kB for lazy Map JavaScript,
+219.61 / 68.81 kB for main JavaScript, and 404.31 / 113.53 kB for Overview
+charts (raw/gzip). Canonical/public Overview JSON, Overview cube, Map, Forecast
+Map, and precinct spatial artifacts are byte-identical.
+
+Practical in-app browser verification at 1280 × 900, 768 × 1024, and
+390 × 844 found zero page-level horizontal overflow, no clipped visible long
+values, and no native target below 44 pixels. Mobile navigation rendered two
+columns by two rows. The real coverage, complete/partial-week semantics,
+source/aggregate-safe populations, overlapping issue flags, retained `UNKNOWN`
+values, model identity/versions, unavailable independent training time,
+artifact timestamp, fixed forecast horizon, overall validation context,
+readiness labels, and responsible-use limits all rendered without a global
+filter toolbar or raw/development metadata.
+
+A Brooklyn / Precinct 60 / Burglary / Felony non-default filter round trip
+returned unchanged. Switching to Bronx reset the precinct to the constrained
+all-in-borough choice and removed Precinct 60; Reset restored the default scope.
+Overview retained five metrics, four chart regions, and its concise disclosure;
+Hotspots retained 396 rows; Forecast and Expected change retained 78 precincts;
+and Anomalies retained 645 default rows with the deterministic first selection.
+All five required browser data artifacts were observed, with no console warning,
+console error, or failed required request in the clean session.
+
+The Governance loading state was observed. Browser-visible network failure and
+recovery were not forced because the allowed surface provides no safe request
+interception and no temporary production harness was justified; those states
+pass focused automated coverage. Pointer activation opened and collapsed the
+native disclosure. The in-app browser showed the visible two-pixel focus ring
+but again did not move focus on a genuine Tab request, and its Enter/Space
+delivery could not maintain the focused summary target. No custom handler,
+alternate browser, or synthetic event was used. This Governance browser-channel
+limitation does not change or close the Phase 7C.3 blocker below.
 
 ### Phase 7C.3 verification
 

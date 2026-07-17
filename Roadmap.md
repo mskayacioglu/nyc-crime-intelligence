@@ -414,11 +414,64 @@ Uygulama, veri sözleşmesi, doğrulama ve sınırlar
 
 ### Governance
 
-- Veri aralığı
-- Model versiyonu
-- Son eğitim zamanı
-- Eksik veri uyarıları
-- Kullanım sınırları
+Durum: tamamlandı. Ayrı ve lazy-loaded **Governance** görünümü, filtreye bağlı
+ürün ekranlarını geliştirme metadata'sıyla doldurmadan, yayımlanmış aggregate
+artifact'lerin kapsamını, veri kalitesini, model yaşam döngüsünü, analitik
+hazırlık durumlarını ve sorumlu kullanım sınırlarını tek bir chartsız yolda
+gösterir. Overview içindeki kısa **About the data** açıklaması bilinçli olarak
+değiştirilmedi; Governance global filtre toolbar'ını göstermez ve değerlerin
+aktif filtrelenmiş dilimi değil, veri/model genelindeki yayımlanmış artifact'leri
+anlattığını açıklar.
+
+Teslim edilen deneyim:
+
+- Olay kapsamı 2006-01-01–2025-12-31, Monday bucket kapsamı
+  2005-12-26–2025-12-29, son tamamlanmış hafta 2025-12-22 ve 2025-12-29 ile
+  başlayan son haftanın partial olduğu ayrı anlamlarla gösterilir. Önceki bucket
+  tarihinin 2006'dan önce olay olduğu anlamına gelmediği açıklanır.
+- 10.071.507 temiz kaynak satırı, 10.049.687 aggregate-safe dahil satır ve
+  21.820 hariç satır birbirleriyle doğrulanır. Kaynak kalite bayrakları ile
+  aggregate-safe `UNKNOWN` boyut sayıları ayrı popülasyonlar olarak sunulur;
+  örtüşen kalite kategorileri toplanmaz ve `UNKNOWN` değerler otomatik olarak
+  hariç tutulmuş sayılmaz.
+- Model, insan tarafından okunur adıyla ve yayımlanmış
+  `duckdb_lag_ensemble_regressor` kimliğiyle gösterilir; model/artifact sürümü
+  1'dir. Eğitim verisi aralığı 2005-12-26–2025-12-29, artifact üretim zamanı
+  `2026-07-05T12:40:05.068774+00:00` ve sabit demo tahmin haftası 2026-01-05
+  ayrı alanlardır. Bağımsız bir eğitim-tamamlanma zamanı bulunmadığı için
+  **Not independently recorded** gösterilir; artifact üretim zamanı “last
+  trained” olarak yeniden etiketlenmez.
+- Genel backtest MAE/RMSE/weighted MAE/coverage bilgisi yalnızca tarihsel model
+  bağlamı olarak gösterilir; aktif filtrelere özel hata, garanti veya belirsizlik
+  aralığı gibi sunulmaz. Tahminlerin point estimate olduğu ve prediction interval
+  bulunmadığı görünürdür.
+- Hotspots, Anomalies, Forecast, Expected Change ve precinct boundary hazırlığı
+  semantik olarak ayrı tutulur. Available, partial, empty, missing, invalid,
+  stale, incompatible ve unavailable durumları metin etiketleri ve sterilize
+  nedenlerle gösterilir; eksik çıktı sıfır ya da “healthy” olarak sunulmaz.
+- Şikâyet kayıtlarının nedensel gerçek olmadığı; gecikme, revizyon ve sınıflama
+  değişikliklerinin aggregate'leri etkileyebildiği; partial haftanın tamamlanmış
+  haftalarla doğrudan karşılaştırılamayacağı; tahminin canlı/gerçek zamanlı
+  operasyonel yönlendirme olmadığı; drift monitor veya genel retraining cadence
+  bulunmadığı açıklanır.
+- Yalnızca aggregate analiz kullanılır. Demografi, kişi düzeyi skor, bireysel
+  risk etiketi, devriye/yaptırım/dağıtım/müdahale önerisi yoktur ve analitik
+  sinyal önceliği policing priority olarak çerçevelenmez.
+- Dört native navigation düğmesi kararlı sırayı, görünür `aria-current`
+  seçimini, skip-link hedefini ve global filtre state'ini korur. Governance
+  turundan sonra tarih, borough, precinct, offense ve law seçimleri değişmeden
+  kalır; filtreli ekranlardaki borough–precinct kısıtı ve Reset davranışı
+  korunur. Mobil navigation ikiye iki grid olarak yerleşir ve native
+  etkileşim hedefleri en az 44 px'dir.
+
+Governance için yeni bir paralel browser artifact'i üretilmedi. Mevcut Overview
+metadata sözleşmesine yalnızca deterministik aggregate kalite alanları,
+Forecast Map model sözleşmesine ise ayrı artifact-generation ve bağımsız
+training-time-unavailable alanları eklendi. Canonical/public kopyalar aynı
+builder'lardan üretilir; TypeScript runtime projection bu sözleşmeleri Map ve
+resmî spatial artifact'leriyle fail-closed biçimde uzlaştırır. Uygulama, veri
+kaynakları, failure davranışı, doğrulama ve gerçek sınırlamalar
+`reports/dashboard_governance_view.md` içinde kaydedildi.
 
 ## 12. Önerilen Teknik Mimari
 

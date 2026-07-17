@@ -11,6 +11,7 @@ import {
   Minus,
   RefreshCw,
   ShieldAlert,
+  ShieldCheck,
   TrendingDown,
   TrendingUp,
 } from 'lucide-react'
@@ -42,6 +43,7 @@ import {
 const OverviewCharts = lazy(() => import('./components/OverviewCharts'))
 const MapView = lazy(() => import('./components/MapView'))
 const AnomaliesView = lazy(() => import('./components/AnomaliesView'))
+const GovernanceView = lazy(() => import('./components/GovernanceView'))
 
 interface AppProps {
   loader?: OverviewLoader
@@ -50,7 +52,7 @@ interface AppProps {
   precinctSpatialReferenceLoader?: PrecinctSpatialReferenceLoader
 }
 
-type ApplicationView = 'overview' | 'map' | 'anomalies'
+type ApplicationView = 'overview' | 'map' | 'anomalies' | 'governance'
 
 type LoadState =
   | { status: 'loading' }
@@ -93,6 +95,15 @@ function AppNavigation({
         <AlertTriangle aria-hidden="true" size={15} />
         Anomalies
       </button>
+      <button
+        type="button"
+        className="view-navigation__item"
+        aria-current={view === 'governance' ? 'page' : undefined}
+        onClick={() => onView('governance')}
+      >
+        <ShieldCheck aria-hidden="true" size={15} />
+        Governance
+      </button>
       <span className="responsible-boundary">
         <ShieldAlert aria-hidden="true" size={14} />
         Area-level patterns only · not individual risk or enforcement guidance
@@ -131,10 +142,29 @@ function AnomaliesModuleLoading() {
   )
 }
 
+function GovernanceModuleLoading() {
+  return (
+    <main id="main-content" className="main-content" aria-busy="true">
+      <div className="state-banner" role="status">
+        <ShieldCheck aria-hidden="true" size={18} />
+        <div>
+          <strong>Opening governance</strong>
+          <span>Preparing data, model, and responsible-use context.</span>
+        </div>
+      </div>
+      <div className="skeleton-block governance-module-loading" aria-hidden="true" />
+    </main>
+  )
+}
+
 function skipLinkLabel(view: ApplicationView): string {
-  if (view === 'overview') return 'Overview'
-  if (view === 'map') return 'Map and hotspots'
-  return 'Anomalies'
+  const labels: Record<ApplicationView, string> = {
+    overview: 'Overview',
+    map: 'Map and hotspots',
+    anomalies: 'Anomalies',
+    governance: 'Governance',
+  }
+  return labels[view]
 }
 
 function AppHeader({
@@ -455,13 +485,22 @@ export default function App({ loader = loadOverview, mapLoader, forecastMapLoade
               precinctSpatialReferenceLoader={precinctSpatialReferenceLoader}
             />
           </Suspense>
-        ) : (
+        ) : view === 'anomalies' ? (
           <Suspense fallback={<AnomaliesModuleLoading />}>
             <AnomaliesView
               metadata={state.bundle.metadata}
               filters={filters}
               onFilters={setFilters}
               onReset={() => setFilters(defaultFilters(state.bundle.metadata))}
+            />
+          </Suspense>
+        ) : (
+          <Suspense fallback={<GovernanceModuleLoading />}>
+            <GovernanceView
+              metadata={state.bundle.metadata}
+              mapLoader={mapLoader}
+              forecastMapLoader={forecastMapLoader}
+              precinctSpatialReferenceLoader={precinctSpatialReferenceLoader}
             />
           </Suspense>
         )

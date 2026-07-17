@@ -41,7 +41,10 @@ export function ErrorState({ retry }: { retry: () => void }) {
         <AlertCircle aria-hidden="true" size={28} />
         <div>
           <h2>Data unavailable</h2>
-          <p>Try loading the dashboard again.</p>
+          <p>
+            The required core Overview metadata or aggregate cube is missing,
+            inaccessible, or invalid. Try loading the dashboard again.
+          </p>
           <button type="button" onClick={retry}>
             <RefreshCw aria-hidden="true" size={15} />
             Retry
