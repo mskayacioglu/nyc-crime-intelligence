@@ -641,7 +641,7 @@ Model success:
 
 - Does the ML model perform better than a naive baseline?
 - Is the error rate controlled in low-volume areas?
-- Are the areas that appear to have the highest risk captured meaningfully in
+- Does the model meaningfully capture the highest-volume aggregate segments in
   historical backtests?
 - Are the model outputs explainable?
 
