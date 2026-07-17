@@ -39,7 +39,7 @@ PROVENANCE = (
     / "nyc_open_data"
     / "police_precincts_y76i-bdw7_26b.provenance.json"
 )
-FORECAST = PROJECT_ROOT / "data" / "processed" / "dashboard_forecast_map.json"
+FORECAST = PROJECT_ROOT / "dashboard" / "public" / "data" / "forecast-map.json"
 
 
 class DashboardPrecinctSpatialReferenceContractTest(unittest.TestCase):

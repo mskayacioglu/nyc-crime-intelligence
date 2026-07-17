@@ -7,7 +7,7 @@ values, create typed fields and quality flags, and write Parquet outputs.
 
 Install the runtime dependency before running:
 
-    python -m pip install duckdb
+    python -m pip install -r requirements.txt
 
 Example full run from the repository root:
 
@@ -237,8 +237,8 @@ def require_duckdb() -> Any:
         import duckdb  # type: ignore
     except ImportError as exc:
         raise SystemExit(
-            "Missing dependency: duckdb. Install it with `python -m pip install duckdb` "
-            "or run the Colab notebook, which installs it before executing this script."
+            "Missing dependency: duckdb. From the repository root, run "
+            "`python -m pip install -r requirements.txt`."
         ) from exc
     return duckdb
 

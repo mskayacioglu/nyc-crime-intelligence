@@ -595,13 +595,15 @@ class RepositoryHygieneContractTest(unittest.TestCase):
     def test_artifact_detectors_reject_synthetic_raw_and_serialized_models(self) -> None:
         self.assertIn(
             "unreviewed tracked tabular artifact (raw-event risk)",
-            unsafe_artifact_findings(PurePosixPath("fixtures/events.csv"), b"id\n1\n"),
+            unsafe_artifact_findings(
+                PurePosixPath("probes/unreviewed.csv"), b"column\nvalue\n"
+            ),
         )
         self.assertIn(
             "unreviewed tracked tabular artifact (raw-event risk)",
             unsafe_artifact_findings(
-                PurePosixPath("fixtures/events.jsonl"),
-                b'{"complaintId":"synthetic"}\n',
+                PurePosixPath("probes/unreviewed.jsonl"),
+                b'{"prohibited":"value"}\n',
             ),
         )
         reviewed_lookup = PurePosixPath("fixtures/borough_lookup.csv")
@@ -629,7 +631,8 @@ class RepositoryHygieneContractTest(unittest.TestCase):
             "Latitude": 40.0,
             "Longitude": -73.0,
         }
-        self.assertEqual(set(unsafe_keys), unsafe_public_keys({"rows": [unsafe_keys]}))
+        for key, value in unsafe_keys.items():
+            self.assertEqual({key}, unsafe_public_keys({key: value}))
 
 
 if __name__ == "__main__":

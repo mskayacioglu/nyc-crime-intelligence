@@ -1339,7 +1339,9 @@ def weekly_unknown_counts(con: Any, weekly_path: Path) -> dict[str, int]:
     return {key: int(row[key]) for key in CLEAN_DIMENSION_FIELDS}
 
 
-def mandatory_stats(con: Any, clean_path: Path, weekly_path: Path) -> dict[str, Any]:
+def clean_source_stats(con: Any, clean_path: Path) -> dict[str, Any]:
+    """Return the mandatory aggregate summary derived from the cleaned source."""
+    require_parquet_columns(con, clean_path, CLEAN_REQUIRED_COLUMNS, "clean events")
     quality = clean_data_quality_stats(con, clean_path)
     clean = fetch_dicts(
         con,
@@ -1362,6 +1364,17 @@ def mandatory_stats(con: Any, clean_path: Path, weekly_path: Path) -> dict[str, 
     )[0]
     if clean["safe_rows_missing_date"]:
         raise ValueError("Aggregate-safe cleaned events contain missing complaint dates.")
+    return {
+        "cleanSourceRows": int(clean["source_rows"]),
+        "safeEventCount": int(clean["safe_rows"]),
+        "safeEventStartDate": clean["min_safe_date"],
+        "safeEventEndDate": clean["max_safe_date"],
+        **quality,
+    }
+
+
+def mandatory_stats(con: Any, clean_path: Path, weekly_path: Path) -> dict[str, Any]:
+    clean = clean_source_stats(con, clean_path)
     weekly = fetch_dicts(
         con,
         f"""
@@ -1383,16 +1396,15 @@ def mandatory_stats(con: Any, clean_path: Path, weekly_path: Path) -> dict[str, 
         raise ValueError("Weekly aggregate contains null dimensions or invalid counts.")
     if int(weekly["max_count"]) > 4_294_967_295:
         raise ValueError("Weekly aggregate count exceeds the uint32 cube contract.")
-    if int(clean["safe_rows"]) != int(weekly["aggregate_count"]):
+    if int(clean["safeEventCount"]) != int(weekly["aggregate_count"]):
         raise ValueError(
             "Aggregate-safe cleaned event count does not reconcile to the weekly "
-            f"aggregate sum ({clean['safe_rows']} != {weekly['aggregate_count']})."
+            f"aggregate sum ({clean['safeEventCount']} != {weekly['aggregate_count']})."
         )
-    quality["aggregateSafeUnknownCounts"]["populationCount"] = int(
-        clean["safe_rows"]
-    )
+    aggregate_safe_unknown_counts = dict(clean["aggregateSafeUnknownCounts"])
+    aggregate_safe_unknown_counts["populationCount"] = int(clean["safeEventCount"])
     unknown_counts = {
-        key: quality["aggregateSafeUnknownCounts"][key]
+        key: aggregate_safe_unknown_counts[key]
         for key in CLEAN_DIMENSION_FIELDS
     }
     weekly_unknown = weekly_unknown_counts(con, weekly_path)
@@ -1402,15 +1414,12 @@ def mandatory_stats(con: Any, clean_path: Path, weekly_path: Path) -> dict[str, 
             "literal UNKNOWN totals."
         )
     return {
-        "cleanSourceRows": int(clean["source_rows"]),
-        "safeEventCount": int(clean["safe_rows"]),
-        "safeEventStartDate": clean["min_safe_date"],
-        "safeEventEndDate": clean["max_safe_date"],
+        **clean,
         "weeklySourceRows": int(weekly["source_rows"]),
         "weeklyAggregateCount": int(weekly["aggregate_count"]),
         "firstWeek": weekly["min_week"],
         "lastWeek": weekly["max_week"],
-        **quality,
+        "aggregateSafeUnknownCounts": aggregate_safe_unknown_counts,
     }
 
 
@@ -1971,7 +1980,6 @@ def build_dashboard_overview(
     duckdb = require_duckdb()
     con = duckdb.connect(database=":memory:")
     con.execute(f"PRAGMA threads={max(1, int(threads))}")
-    require_parquet_columns(con, clean_events_path, CLEAN_REQUIRED_COLUMNS, "clean events")
     require_parquet_columns(con, weekly_path, WEEKLY_REQUIRED_COLUMNS, "weekly area")
 
     stats = mandatory_stats(con, clean_events_path, weekly_path)

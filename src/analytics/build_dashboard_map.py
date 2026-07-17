@@ -189,6 +189,7 @@ def required_number(
 
 
 def aggregate_safe_stats(con: Any, clean_path: Path) -> dict[str, Any]:
+    require_clean_input(con, clean_path)
     stats = fetch_dicts(
         con,
         f"""
@@ -928,7 +929,6 @@ def build_dashboard_map(
     con = duckdb.connect(database=":memory:")
     try:
         con.execute(f"PRAGMA threads={max(1, int(threads))}")
-        require_clean_input(con, clean_events_path)
         stats = aggregate_safe_stats(con, clean_events_path)
         hotspot_source, validated_records = load_hotspots(
             con, hotspots_path, stats["endDate"]

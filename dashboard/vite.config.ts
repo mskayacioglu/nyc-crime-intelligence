@@ -9,5 +9,8 @@ export default defineConfig({
     css: true,
     fileParallelism: false,
     restoreMocks: true,
+    // A cold dependency cache can make the navigation suites exceed Vitest's
+    // five-second default even though their assertions remain deterministic.
+    testTimeout: 15_000,
   },
 })

@@ -77,6 +77,24 @@ WEEKLY_REQUIRED_COLUMNS = [
 
 HOTSPOT_COLUMNS_USED = CLEAN_EVENTS_REQUIRED_COLUMNS.copy()
 
+# Private clean-event rows are collapsed to this weighted, aggregate-only seam
+# before any hotspot scoring runs. Tests can populate the same view directly
+# with deterministic bins without constructing incident-shaped fixtures.
+HOTSPOT_INPUT_BIN_VIEW = "hotspot_input_bins"
+HOTSPOT_INPUT_BIN_COLUMNS = [
+    "bin_date",
+    "borough",
+    "precinct",
+    "offense_type",
+    "law_category",
+    "latitude",
+    "longitude",
+    "flag_missing_coordinates",
+    "flag_zero_coordinates",
+    "flag_coordinates_outside_broad_nyc_bounds",
+    "event_count",
+]
+
 HOTSPOT_OUTPUT_COLUMNS = [
     "rank_overall",
     "rank_in_grain",
@@ -518,29 +536,76 @@ def validate_clean_source(con: Any, clean_events_path: Path) -> None:
 
 
 def create_input_views(con: Any, clean_events_path: Path) -> None:
+    """Collapse private clean events into weighted bins used by all scoring SQL."""
     con.execute(
         f"""
-        CREATE OR REPLACE TEMP VIEW clean_events AS
+        CREATE OR REPLACE TEMP TABLE {HOTSPOT_INPUT_BIN_VIEW} AS
+        WITH normalized AS (
+            SELECT
+                complaint_from_date::DATE AS bin_date,
+                COALESCE(CAST(borough AS VARCHAR), 'UNKNOWN') AS borough,
+                COALESCE(CAST(precinct AS VARCHAR), 'UNKNOWN') AS precinct,
+                COALESCE(CAST(offense_type AS VARCHAR), 'UNKNOWN') AS offense_type,
+                COALESCE(CAST(law_category AS VARCHAR), 'UNKNOWN') AS law_category,
+                CAST(latitude AS DOUBLE) AS latitude,
+                CAST(longitude AS DOUBLE) AS longitude,
+                COALESCE(CAST(flag_missing_coordinates AS BOOLEAN), false)
+                    AS flag_missing_coordinates,
+                COALESCE(CAST(flag_zero_coordinates AS BOOLEAN), false)
+                    AS flag_zero_coordinates,
+                COALESCE(
+                    CAST(flag_coordinates_outside_broad_nyc_bounds AS BOOLEAN),
+                    false
+                ) AS flag_coordinates_outside_broad_nyc_bounds
+            FROM read_parquet({sql_string(clean_events_path)})
+            WHERE is_clean_event_for_aggregate
+                AND complaint_from_date IS NOT NULL
+        )
         SELECT
-            complaint_from_date::DATE AS complaint_from_date,
-            COALESCE(CAST(borough AS VARCHAR), 'UNKNOWN') AS borough,
-            COALESCE(CAST(precinct AS VARCHAR), 'UNKNOWN') AS precinct,
-            COALESCE(CAST(offense_type AS VARCHAR), 'UNKNOWN') AS offense_type,
-            COALESCE(CAST(law_category AS VARCHAR), 'UNKNOWN') AS law_category,
-            CAST(latitude AS DOUBLE) AS latitude,
-            CAST(longitude AS DOUBLE) AS longitude,
-            COALESCE(CAST(flag_missing_coordinates AS BOOLEAN), false)
-                AS flag_missing_coordinates,
-            COALESCE(CAST(flag_zero_coordinates AS BOOLEAN), false)
-                AS flag_zero_coordinates,
-            COALESCE(CAST(flag_coordinates_outside_broad_nyc_bounds AS BOOLEAN), false)
-                AS flag_coordinates_outside_broad_nyc_bounds,
-            CAST(is_clean_event_for_aggregate AS BOOLEAN) AS is_clean_event_for_aggregate
-        FROM read_parquet({sql_string(clean_events_path)})
-        WHERE is_clean_event_for_aggregate
-            AND complaint_from_date IS NOT NULL
+            *,
+            COUNT(*)::BIGINT AS event_count
+        FROM normalized
+        GROUP BY ALL
         """
     )
+
+
+def validate_aggregate_input_bins(con: Any) -> None:
+    """Validate the weighted aggregate seam shared by production and tests."""
+    described = fetch_dicts(
+        con,
+        f"DESCRIBE SELECT * FROM {HOTSPOT_INPUT_BIN_VIEW}",
+    )
+    actual_columns = {str(row["column_name"]) for row in described}
+    missing = sorted(set(HOTSPOT_INPUT_BIN_COLUMNS).difference(actual_columns))
+    if missing:
+        raise ValueError(f"Aggregate hotspot input bins are missing columns: {missing}")
+
+    invalid = fetch_one(
+        con,
+        f"""
+        SELECT
+            COUNT(*) FILTER (WHERE bin_date IS NULL)::BIGINT AS missing_bin_dates,
+            COUNT(*) FILTER (
+                WHERE borough IS NULL
+                    OR precinct IS NULL
+                    OR offense_type IS NULL
+                    OR law_category IS NULL
+            )::BIGINT AS missing_dimensions,
+            COUNT(*) FILTER (
+                WHERE event_count IS NULL OR event_count <= 0
+            )::BIGINT AS invalid_event_counts,
+            COUNT(*) FILTER (
+                WHERE flag_missing_coordinates IS NULL
+                    OR flag_zero_coordinates IS NULL
+                    OR flag_coordinates_outside_broad_nyc_bounds IS NULL
+            )::BIGINT AS missing_coordinate_flags
+        FROM {HOTSPOT_INPUT_BIN_VIEW}
+        """,
+    )
+    failures = {name: int(value) for name, value in invalid.items() if value}
+    if failures:
+        raise ValueError(f"Aggregate hotspot input bins are invalid: {failures}")
 
 
 def build_input_summary(con: Any, weekly_path: Path | None = None) -> dict[str, Any]:
@@ -548,10 +613,10 @@ def build_input_summary(con: Any, weekly_path: Path | None = None) -> dict[str, 
         con,
         f"""
         SELECT
-            COUNT(*)::BIGINT AS clean_aggregate_event_rows,
-            MIN(complaint_from_date) AS min_complaint_from_date,
-            MAX(complaint_from_date) AS max_complaint_from_date,
-            COUNT(*) FILTER (
+            COALESCE(SUM(event_count), 0)::BIGINT AS clean_aggregate_event_rows,
+            MIN(bin_date) AS min_complaint_from_date,
+            MAX(bin_date) AS max_complaint_from_date,
+            COALESCE(SUM(event_count) FILTER (
                 WHERE latitude IS NOT NULL
                     AND longitude IS NOT NULL
                     AND latitude <> 0
@@ -561,10 +626,10 @@ def build_input_summary(con: Any, weekly_path: Path | None = None) -> dict[str, 
                     AND NOT flag_missing_coordinates
                     AND NOT flag_zero_coordinates
                     AND NOT flag_coordinates_outside_broad_nyc_bounds
-            )::BIGINT AS valid_coordinate_event_rows,
+            ), 0)::BIGINT AS valid_coordinate_event_rows,
             COUNT(DISTINCT borough || chr(31) || precinct || chr(31) || offense_type || chr(31) || law_category)::BIGINT
                 AS precinct_offense_segment_count
-        FROM clean_events
+        FROM {HOTSPOT_INPUT_BIN_VIEW}
         """,
     )
     if weekly_path is not None:
@@ -586,11 +651,11 @@ def build_input_summary(con: Any, weekly_path: Path | None = None) -> dict[str, 
 def get_event_date_bounds(con: Any) -> tuple[date, date]:
     bounds = fetch_one(
         con,
-        """
+        f"""
         SELECT
-            MIN(complaint_from_date) AS min_event_date,
-            MAX(complaint_from_date) AS max_event_date
-        FROM clean_events
+            MIN(bin_date) AS min_event_date,
+            MAX(bin_date) AS max_event_date
+        FROM {HOTSPOT_INPUT_BIN_VIEW}
         """,
     )
     if bounds["min_event_date"] is None or bounds["max_event_date"] is None:
@@ -645,20 +710,21 @@ def create_hotspot_views(
 
     con.execute(
         f"""
-        CREATE OR REPLACE TEMP VIEW valid_geo_events AS
+        CREATE OR REPLACE TEMP VIEW valid_geo_bins AS
         SELECT
-            complaint_from_date,
+            bin_date,
             borough,
             precinct,
             offense_type,
             law_category,
             latitude,
             longitude,
+            event_count,
             ROUND(FLOOR(latitude / {grid_size}) * {grid_size} + {grid_size} / 2, 5)
                 AS grid_latitude,
             ROUND(FLOOR(longitude / {grid_size}) * {grid_size} + {grid_size} / 2, 5)
                 AS grid_longitude
-        FROM clean_events
+        FROM {HOTSPOT_INPUT_BIN_VIEW}
         WHERE latitude IS NOT NULL
             AND longitude IS NOT NULL
             AND latitude <> 0
@@ -673,19 +739,19 @@ def create_hotspot_views(
 
     con.execute(
         f"""
-        CREATE OR REPLACE TEMP VIEW analysis_events AS
+        CREATE OR REPLACE TEMP VIEW analysis_bins AS
         SELECT *
-        FROM clean_events
-        WHERE complaint_from_date BETWEEN {sql_date(windows['baseline_start_date'])}
+        FROM {HOTSPOT_INPUT_BIN_VIEW}
+        WHERE bin_date BETWEEN {sql_date(windows['baseline_start_date'])}
             AND {sql_date(windows['scoring_end_date'])}
         """
     )
     con.execute(
         f"""
-        CREATE OR REPLACE TEMP VIEW analysis_geo_events AS
+        CREATE OR REPLACE TEMP VIEW analysis_geo_bins AS
         SELECT *
-        FROM valid_geo_events
-        WHERE complaint_from_date BETWEEN {sql_date(windows['baseline_start_date'])}
+        FROM valid_geo_bins
+        WHERE bin_date BETWEEN {sql_date(windows['baseline_start_date'])}
             AND {sql_date(windows['scoring_end_date'])}
         """
     )
@@ -694,30 +760,30 @@ def create_hotspot_views(
         f"""
         CREATE OR REPLACE TEMP VIEW precinct_window_totals AS
         SELECT
-            COUNT(*) FILTER (
-                WHERE complaint_from_date BETWEEN {sql_date(windows['recent_30_start_date'])}
+            COALESCE(SUM(event_count) FILTER (
+                WHERE bin_date BETWEEN {sql_date(windows['recent_30_start_date'])}
                     AND {sql_date(windows['scoring_end_date'])}
-            )::DOUBLE AS recent_total_events,
-            COUNT(*) FILTER (
-                WHERE complaint_from_date BETWEEN {sql_date(windows['baseline_start_date'])}
+            ), 0)::DOUBLE AS recent_total_events,
+            COALESCE(SUM(event_count) FILTER (
+                WHERE bin_date BETWEEN {sql_date(windows['baseline_start_date'])}
                     AND {sql_date(windows['baseline_end_date'])}
-            )::DOUBLE AS baseline_total_events
-        FROM analysis_events
+            ), 0)::DOUBLE AS baseline_total_events
+        FROM analysis_bins
         """
     )
     con.execute(
         f"""
         CREATE OR REPLACE TEMP VIEW grid_window_totals AS
         SELECT
-            COUNT(*) FILTER (
-                WHERE complaint_from_date BETWEEN {sql_date(windows['recent_30_start_date'])}
+            COALESCE(SUM(event_count) FILTER (
+                WHERE bin_date BETWEEN {sql_date(windows['recent_30_start_date'])}
                     AND {sql_date(windows['scoring_end_date'])}
-            )::DOUBLE AS recent_total_events,
-            COUNT(*) FILTER (
-                WHERE complaint_from_date BETWEEN {sql_date(windows['baseline_start_date'])}
+            ), 0)::DOUBLE AS recent_total_events,
+            COALESCE(SUM(event_count) FILTER (
+                WHERE bin_date BETWEEN {sql_date(windows['baseline_start_date'])}
                     AND {sql_date(windows['baseline_end_date'])}
-            )::DOUBLE AS baseline_total_events
-        FROM analysis_geo_events
+            ), 0)::DOUBLE AS baseline_total_events
+        FROM analysis_geo_bins
         """
     )
 
@@ -727,11 +793,11 @@ def create_hotspot_views(
         SELECT
             borough,
             precinct,
-            ROUND(AVG(latitude), 6) AS map_latitude,
-            ROUND(AVG(longitude), 6) AS map_longitude,
-            COUNT(*)::BIGINT AS centroid_event_count
-        FROM valid_geo_events
-        WHERE complaint_from_date <= {sql_date(windows['scoring_end_date'])}
+            ROUND(SUM(latitude * event_count) / SUM(event_count), 6) AS map_latitude,
+            ROUND(SUM(longitude * event_count) / SUM(event_count), 6) AS map_longitude,
+            SUM(event_count)::BIGINT AS centroid_event_count
+        FROM valid_geo_bins
+        WHERE bin_date <= {sql_date(windows['scoring_end_date'])}
             AND precinct <> 'UNKNOWN'
         GROUP BY 1, 2
         """
@@ -746,23 +812,23 @@ def create_hotspot_views(
                 precinct,
                 offense_type,
                 law_category,
-                COUNT(*) FILTER (
-                    WHERE complaint_from_date BETWEEN {sql_date(windows['recent_7_start_date'])}
+                COALESCE(SUM(event_count) FILTER (
+                    WHERE bin_date BETWEEN {sql_date(windows['recent_7_start_date'])}
                         AND {sql_date(windows['scoring_end_date'])}
-                )::BIGINT AS recent_7_day_count,
-                COUNT(*) FILTER (
-                    WHERE complaint_from_date BETWEEN {sql_date(windows['recent_30_start_date'])}
+                ), 0)::BIGINT AS recent_7_day_count,
+                COALESCE(SUM(event_count) FILTER (
+                    WHERE bin_date BETWEEN {sql_date(windows['recent_30_start_date'])}
                         AND {sql_date(windows['scoring_end_date'])}
-                )::BIGINT AS recent_30_day_count,
-                COUNT(*) FILTER (
-                    WHERE complaint_from_date BETWEEN {sql_date(windows['recent_90_start_date'])}
+                ), 0)::BIGINT AS recent_30_day_count,
+                COALESCE(SUM(event_count) FILTER (
+                    WHERE bin_date BETWEEN {sql_date(windows['recent_90_start_date'])}
                         AND {sql_date(windows['scoring_end_date'])}
-                )::BIGINT AS recent_90_day_count,
-                COUNT(*) FILTER (
-                    WHERE complaint_from_date BETWEEN {sql_date(windows['baseline_start_date'])}
+                ), 0)::BIGINT AS recent_90_day_count,
+                COALESCE(SUM(event_count) FILTER (
+                    WHERE bin_date BETWEEN {sql_date(windows['baseline_start_date'])}
                         AND {sql_date(windows['baseline_end_date'])}
-                )::BIGINT AS baseline_event_count
-            FROM analysis_events
+                ), 0)::BIGINT AS baseline_event_count
+            FROM analysis_bins
             GROUP BY 1, 2, 3, 4
         ),
         valid_recent_coordinates AS (
@@ -771,9 +837,9 @@ def create_hotspot_views(
                 precinct,
                 offense_type,
                 law_category,
-                COUNT(*)::BIGINT AS valid_coordinate_event_count
-            FROM analysis_geo_events
-            WHERE complaint_from_date BETWEEN {sql_date(windows['recent_30_start_date'])}
+                SUM(event_count)::BIGINT AS valid_coordinate_event_count
+            FROM analysis_geo_bins
+            WHERE bin_date BETWEEN {sql_date(windows['recent_30_start_date'])}
                 AND {sql_date(windows['scoring_end_date'])}
             GROUP BY 1, 2, 3, 4
         )
@@ -821,23 +887,23 @@ def create_hotspot_views(
                 grid_longitude,
                 offense_type,
                 law_category,
-                COUNT(*) FILTER (
-                    WHERE complaint_from_date BETWEEN {sql_date(windows['recent_7_start_date'])}
+                COALESCE(SUM(event_count) FILTER (
+                    WHERE bin_date BETWEEN {sql_date(windows['recent_7_start_date'])}
                         AND {sql_date(windows['scoring_end_date'])}
-                )::BIGINT AS recent_7_day_count,
-                COUNT(*) FILTER (
-                    WHERE complaint_from_date BETWEEN {sql_date(windows['recent_30_start_date'])}
+                ), 0)::BIGINT AS recent_7_day_count,
+                COALESCE(SUM(event_count) FILTER (
+                    WHERE bin_date BETWEEN {sql_date(windows['recent_30_start_date'])}
                         AND {sql_date(windows['scoring_end_date'])}
-                )::BIGINT AS recent_30_day_count,
-                COUNT(*) FILTER (
-                    WHERE complaint_from_date BETWEEN {sql_date(windows['recent_90_start_date'])}
+                ), 0)::BIGINT AS recent_30_day_count,
+                COALESCE(SUM(event_count) FILTER (
+                    WHERE bin_date BETWEEN {sql_date(windows['recent_90_start_date'])}
                         AND {sql_date(windows['scoring_end_date'])}
-                )::BIGINT AS recent_90_day_count,
-                COUNT(*) FILTER (
-                    WHERE complaint_from_date BETWEEN {sql_date(windows['baseline_start_date'])}
+                ), 0)::BIGINT AS recent_90_day_count,
+                COALESCE(SUM(event_count) FILTER (
+                    WHERE bin_date BETWEEN {sql_date(windows['baseline_start_date'])}
                         AND {sql_date(windows['baseline_end_date'])}
-                )::BIGINT AS baseline_event_count
-            FROM analysis_geo_events
+                ), 0)::BIGINT AS baseline_event_count
+            FROM analysis_geo_bins
             GROUP BY 1, 2, 3, 4
         ),
         borough_counts AS (
@@ -847,12 +913,12 @@ def create_hotspot_views(
                 offense_type,
                 law_category,
                 borough,
-                COUNT(*)::BIGINT AS borough_count,
+                SUM(event_count)::BIGINT AS borough_count,
                 ROW_NUMBER() OVER (
                     PARTITION BY grid_latitude, grid_longitude, offense_type, law_category
-                    ORDER BY COUNT(*) DESC, borough
+                    ORDER BY SUM(event_count) DESC, borough
                 ) AS borough_rank
-            FROM analysis_geo_events
+            FROM analysis_geo_bins
             GROUP BY 1, 2, 3, 4, 5
         )
         SELECT
@@ -1303,8 +1369,8 @@ def build_coordinate_quality(con: Any) -> dict[str, Any]:
         f"""
         WITH source_counts AS (
             SELECT
-                COUNT(*)::BIGINT AS aggregate_event_rows,
-                COUNT(*) FILTER (
+                COALESCE(SUM(event_count), 0)::BIGINT AS aggregate_event_rows,
+                COALESCE(SUM(event_count) FILTER (
                     WHERE latitude IS NOT NULL
                         AND longitude IS NOT NULL
                         AND latitude <> 0
@@ -1314,18 +1380,18 @@ def build_coordinate_quality(con: Any) -> dict[str, Any]:
                         AND NOT flag_missing_coordinates
                         AND NOT flag_zero_coordinates
                         AND NOT flag_coordinates_outside_broad_nyc_bounds
-                )::BIGINT AS valid_coordinate_event_rows,
-                COUNT(*) FILTER (
+                ), 0)::BIGINT AS valid_coordinate_event_rows,
+                COALESCE(SUM(event_count) FILTER (
                     WHERE latitude IS NULL
                         OR longitude IS NULL
                         OR flag_missing_coordinates
-                )::BIGINT AS missing_coordinate_event_rows,
-                COUNT(*) FILTER (
+                ), 0)::BIGINT AS missing_coordinate_event_rows,
+                COALESCE(SUM(event_count) FILTER (
                     WHERE latitude = 0
                         OR longitude = 0
                         OR flag_zero_coordinates
-                )::BIGINT AS zero_coordinate_event_rows,
-                COUNT(*) FILTER (
+                ), 0)::BIGINT AS zero_coordinate_event_rows,
+                COALESCE(SUM(event_count) FILTER (
                     WHERE flag_coordinates_outside_broad_nyc_bounds
                         OR (
                             latitude IS NOT NULL
@@ -1337,8 +1403,8 @@ def build_coordinate_quality(con: Any) -> dict[str, Any]:
                                 AND longitude BETWEEN {NYC_LON_MIN} AND {NYC_LON_MAX}
                             )
                         )
-                )::BIGINT AS out_of_bounds_coordinate_event_rows
-            FROM clean_events
+                ), 0)::BIGINT AS out_of_bounds_coordinate_event_rows
+            FROM {HOTSPOT_INPUT_BIN_VIEW}
         )
         SELECT
             aggregate_event_rows,
@@ -1725,6 +1791,7 @@ def main() -> None:
 
     print("Creating aggregate-safe input views.")
     create_input_views(con, clean_events_path)
+    validate_aggregate_input_bins(con)
     input_summary = build_input_summary(con, weekly_path if weekly_available else None)
     min_event_date, max_event_date = get_event_date_bounds(con)
     scoring_end_date = compute_scoring_end_date(

@@ -145,7 +145,7 @@ Baseline approaches:
 
 - Use the previous week's value as the forecast
 - Use the average of the last 4 weeks
-- Use the weighted average of the last 8 weeks
+- Use the arithmetic average of the last 8 weeks
 - Use the same week of the previous year as a reference
 
 Evaluation metrics:
@@ -168,9 +168,18 @@ data/processed/baseline_predictions.parquet
 
 Objective: Develop an explainable and operationally usable forecasting model that outperforms the baseline models.
 
-Proposed initial model:
+Initial proposal:
 
 - A LightGBM- or XGBoost-based regression model
+
+Implemented result:
+
+- `duckdb_lag_ensemble_regressor`, version 1, a deterministic prior-only lag
+  ensemble selected by time-ordered validation RMSE
+- Formula inputs: the one-week and 52-week lags plus the trailing four- and
+  eight-week arithmetic means
+- Implementation dependency: the Python standard library and pinned DuckDB;
+  LightGBM and XGBoost are not used
 
 Proposed feature groups:
 

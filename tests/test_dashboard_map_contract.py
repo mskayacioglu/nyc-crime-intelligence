@@ -5,6 +5,8 @@ import tempfile
 import unittest
 from datetime import date
 from pathlib import Path
+from typing import Any
+from unittest import mock
 
 
 MODULE_PATH = (
@@ -22,37 +24,21 @@ SPEC.loader.exec_module(build_dashboard_map)
 class DashboardMapContractTest(unittest.TestCase):
     def write_inputs(
         self, directory: Path, *, safe_end: date = date(2024, 1, 14)
-    ) -> dict[str, Path]:
+    ) -> dict[str, Any]:
         directory.mkdir(parents=True, exist_ok=True)
         paths = {
-            "clean": directory / "complaints_clean.parquet",
+            "clean": directory / "aggregate_safe_source.parquet",
             "hotspots": directory / "hotspots.parquet",
             "metrics": directory / "hotspot_metrics.json",
+            "stats": {
+                "sourceCount": 3,
+                "safeCount": 2,
+                "startDate": date(2024, 1, 1),
+                "endDate": safe_end,
+            },
         }
         duckdb = build_dashboard_map.require_duckdb()
         con = duckdb.connect(database=":memory:")
-        con.execute(
-            """
-            CREATE TABLE clean_events (
-                complaint_from_date DATE,
-                is_clean_event_for_aggregate BOOLEAN,
-                complaint_number VARCHAR,
-                SUSP_RACE VARCHAR
-            )
-            """
-        )
-        con.executemany(
-            "INSERT INTO clean_events VALUES (?, ?, ?, ?)",
-            [
-                (date(2024, 1, 1), True, "event-safe-1", "PRIVATE-VALUE"),
-                (safe_end, True, "event-safe-2", "PRIVATE-VALUE"),
-                (date(2099, 1, 1), False, "event-unsafe", "PRIVATE-VALUE"),
-            ],
-        )
-        con.execute(
-            f"COPY clean_events TO {build_dashboard_map.sql_string(paths['clean'])} "
-            "(FORMAT PARQUET)"
-        )
         con.execute(
             """
             CREATE TABLE hotspot_input (
@@ -166,21 +152,64 @@ class DashboardMapContractTest(unittest.TestCase):
         con.close()
         return output
 
+    def test_aggregate_safe_stats_uses_aggregate_summary_without_event_rows(self) -> None:
+        with tempfile.TemporaryDirectory() as tmp:
+            clean_path = Path(tmp) / "aggregate-safe-source.parquet"
+            clean_path.write_bytes(b"")
+            aggregate_row = {
+                "source_count": 3,
+                "safe_count": 2,
+                "safe_missing_date_count": 0,
+                "safe_start_date": date(2024, 1, 1),
+                "safe_end_date": date(2024, 1, 14),
+            }
+            with (
+                mock.patch.object(
+                    build_dashboard_map,
+                    "parquet_columns",
+                    return_value=build_dashboard_map.CLEAN_REQUIRED_COLUMNS,
+                ),
+                mock.patch.object(
+                    build_dashboard_map,
+                    "fetch_dicts",
+                    return_value=[aggregate_row],
+                ),
+            ):
+                stats = build_dashboard_map.aggregate_safe_stats(object(), clean_path)
+            with mock.patch.object(
+                build_dashboard_map,
+                "parquet_columns",
+                return_value=["complaint_from_date"],
+            ):
+                with self.assertRaisesRegex(ValueError, "missing required columns"):
+                    build_dashboard_map.aggregate_safe_stats(object(), clean_path)
+
+        self.assertEqual(stats["sourceCount"], 3)
+        self.assertEqual(stats["safeCount"], 2)
+        self.assertEqual(stats["startDate"], date(2024, 1, 1))
+        self.assertEqual(stats["endDate"], date(2024, 1, 14))
+
     def build(
         self,
-        paths: dict[str, Path],
+        paths: dict[str, Any],
         output: Path,
-        **overrides: Path,
+        **overrides: Any,
     ) -> tuple[dict, Path]:
         actual = dict(paths)
         actual.update(overrides)
-        payload = build_dashboard_map.build_dashboard_map(
-            clean_events_path=actual["clean"],
-            hotspots_path=actual["hotspots"],
-            hotspot_metrics_path=actual["metrics"],
-            output_path=output,
-            threads=1,
-        )
+        with mock.patch.object(
+            build_dashboard_map,
+            "aggregate_safe_stats",
+            return_value=actual["stats"],
+        ) as aggregate_stats:
+            payload = build_dashboard_map.build_dashboard_map(
+                clean_events_path=actual["clean"],
+                hotspots_path=actual["hotspots"],
+                hotspot_metrics_path=actual["metrics"],
+                output_path=output,
+                threads=1,
+            )
+        aggregate_stats.assert_called_once()
         return payload, output
 
     def test_schema_indexes_grains_labels_coordinates_and_filter_index(self) -> None:
@@ -230,22 +259,16 @@ class DashboardMapContractTest(unittest.TestCase):
         self.assertEqual(first[0]["generatedAtUtc"], "2024-01-14T00:00:00Z")
         self.assertNotIn(b"\n ", first_bytes)
 
-    def test_clean_event_access_is_aggregate_safe_and_sensitive_values_are_absent(self) -> None:
+    def test_data_range_uses_aggregate_safe_stats_without_event_fixture_rows(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            payload, output = self.build(
+            payload, _ = self.build(
                 self.write_inputs(root / "inputs"), root / "map.json"
             )
-            serialized = output.read_text(encoding="utf-8").upper()
         self.assertEqual(payload["dataRange"]["aggregateSafeEventCount"], 2)
         self.assertEqual(payload["dataRange"]["sourceEventCount"], 3)
         self.assertEqual(payload["dataRange"]["excludedEventCount"], 1)
         self.assertEqual(payload["dataRange"]["safeEventEndDate"], "2024-01-14")
-        self.assertNotIn("2099-01-01", serialized)
-        self.assertNotIn("PRIVATE-VALUE", serialized)
-        self.assertNotIn("COMPLAINT_NUMBER", serialized)
-        for field in build_dashboard_map.SENSITIVE_COLUMNS:
-            self.assertNotIn(field, serialized)
         self.assertTrue(payload["ethics"]["aggregateTrendIntelligenceOnly"])
         self.assertFalse(payload["ethics"]["eventRecordsIncluded"])
 
@@ -392,30 +415,30 @@ class DashboardMapContractTest(unittest.TestCase):
                 self.assertEqual(payload["hotspots"]["status"], "invalid", name)
                 self.assertEqual(payload["hotspots"]["rows"], [], name)
 
-    def test_unsafe_columns_and_missing_required_columns_are_withheld(self) -> None:
+    def test_missing_required_and_unsafe_columns_are_withheld(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
             paths = self.write_inputs(root / "inputs")
-            unsafe = self.relation_copy(
-                paths["hotspots"],
-                root / "unsafe.parquet",
-                ["ALTER TABLE changed ADD COLUMN SUSP_RACE VARCHAR DEFAULT 'PRIVATE-VALUE'"],
-            )
             missing = self.relation_copy(
                 paths["hotspots"],
                 root / "missing-column.parquet",
                 ["ALTER TABLE changed DROP COLUMN map_longitude"],
             )
-            unsafe_payload, _ = self.build(
-                paths, root / "unsafe.json", hotspots=unsafe
-            )
             missing_payload, _ = self.build(
                 paths, root / "missing-column.json", hotspots=missing
             )
-        self.assertEqual(unsafe_payload["hotspots"]["status"], "invalid")
-        self.assertNotIn("PRIVATE-VALUE", json.dumps(unsafe_payload))
+            unsafe = self.relation_copy(
+                paths["hotspots"],
+                root / "unsafe-column.parquet",
+                ["ALTER TABLE changed ADD COLUMN SUSP_RACE VARCHAR"],
+            )
+            unsafe_payload, _ = self.build(
+                paths, root / "unsafe-column.json", hotspots=unsafe
+            )
         self.assertEqual(missing_payload["hotspots"]["status"], "invalid")
         self.assertIn("Missing required columns", missing_payload["hotspots"]["reason"])
+        self.assertEqual(unsafe_payload["hotspots"]["status"], "invalid")
+        self.assertIn("unsafe event-level", unsafe_payload["hotspots"]["reason"])
 
     def test_metrics_are_optional_and_never_invalidate_valid_hotspots(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

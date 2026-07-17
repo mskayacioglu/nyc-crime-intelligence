@@ -362,8 +362,9 @@ incompatible methodology/identity from malformed input.
 
 ## Run locally
 
-Use npm with a Node.js version accepted by the locked Vite toolchain:
-`^20.19.0 || ^22.12.0 || >=24.0.0`. A clean checkout should use the lockfile:
+Use npm 10 or newer with a Node.js version accepted by every locked dependency:
+`^20.19.0 || ^22.13.0 || >=24.0.0`. `.nvmrc` selects the verified Node 24.5.0
+target. A clean checkout should use the lockfile:
 
 ```bash
 cd dashboard
@@ -388,12 +389,29 @@ The verified development server for this redesign is
 
 ## Verify
 
-The current repository baseline is 212 Vitest tests across 15 files and 99
+The current repository baseline is 212 Vitest tests across 15 files and 118
 discovered Python contract tests. The named subsections below retain the exact
 counts, bundle sizes, and practical results recorded at each milestone; older
 totals are historical snapshots, not competing current baselines.
 
-From the repository root:
+The normal all-in-one command is run from the repository root after activating
+the documented Python environment:
+
+```bash
+./scripts/verify_local.sh
+```
+
+It starts with deterministic aggregate-only Python contracts and then performs
+`npm ci`, lint, Vitest, the production build, and the production dependency
+audit. It also checks documentation, privacy/path/notebook hygiene, Git diff
+whitespace, and port 4173. No raw complaint file or ignored processed artifact
+is needed. After a full analytical rebuild, use
+`./scripts/verify_local.sh --full-data` for the explicit optional artifact
+integration check. That mode rebuilds Forecast Map, Map, Overview, and the
+compressed Overview cube through the full private-clean-source paths and
+compares their temporary outputs with the committed browser-safe artifacts.
+
+Focused Python commands from the repository root remain available:
 
 ```bash
 .venv/bin/python -m unittest tests.test_anomaly_detection_contract

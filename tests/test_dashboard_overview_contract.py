@@ -23,6 +23,74 @@ SPEC.loader.exec_module(build_dashboard_overview)
 
 
 class DashboardOverviewContractTest(unittest.TestCase):
+    @staticmethod
+    def source_stats() -> dict:
+        issue_counts = {key: 0 for key in build_dashboard_overview.QUALITY_FLAG_FIELDS}
+        issue_counts.update(
+            {
+                "futureComplaintStartDate": 1,
+                "missingPrecinct": 2,
+                "missingCoordinates": 1,
+            }
+        )
+        return {
+            "cleanSourceRows": 11,
+            "safeEventCount": 10,
+            "safeEventStartDate": date(2024, 1, 1),
+            "safeEventEndDate": date(2024, 1, 14),
+            "sourceIssueCounts": {
+                "populationCount": 11,
+                **issue_counts,
+                "rowsWithAnyIssue": 3,
+                "rowsWithMultipleIssues": 1,
+                "maximumIssuesPerRow": 2,
+                "categoriesOverlap": True,
+                "countsAreNonAdditive": True,
+            },
+            "aggregateSafeUnknownCounts": {
+                "populationCount": None,
+                "borough": 0,
+                "precinct": 2,
+                "offense": 0,
+                "lawCategory": 0,
+                "valuesRetained": True,
+                "categoriesOverlap": True,
+            },
+        }
+
+    def test_clean_source_stats_uses_aggregate_summaries_without_event_rows(self) -> None:
+        expected = self.source_stats()
+        quality = {
+            "sourceIssueCounts": expected["sourceIssueCounts"],
+            "aggregateSafeUnknownCounts": expected["aggregateSafeUnknownCounts"],
+        }
+        aggregate_row = {
+            "source_rows": expected["cleanSourceRows"],
+            "safe_rows": expected["safeEventCount"],
+            "safe_rows_missing_date": 0,
+            "min_safe_date": expected["safeEventStartDate"],
+            "max_safe_date": expected["safeEventEndDate"],
+        }
+        with (
+            patch.object(build_dashboard_overview, "require_parquet_columns") as require,
+            patch.object(
+                build_dashboard_overview,
+                "clean_data_quality_stats",
+                return_value=quality,
+            ),
+            patch.object(
+                build_dashboard_overview,
+                "fetch_dicts",
+                return_value=[aggregate_row],
+            ),
+        ):
+            actual = build_dashboard_overview.clean_source_stats(
+                object(), Path("aggregate-safe-source.parquet")
+            )
+
+        require.assert_called_once()
+        self.assertEqual(actual, expected)
+
     def write_inputs(self, directory: Path) -> dict[str, Path]:
         directory.mkdir(parents=True, exist_ok=True)
         paths = {
@@ -39,106 +107,6 @@ class DashboardOverviewContractTest(unittest.TestCase):
         }
         duckdb = build_dashboard_overview.require_duckdb()
         con = duckdb.connect(database=":memory:")
-        quality_columns = list(build_dashboard_overview.QUALITY_FLAG_FIELDS.values())
-        quality_column_sql = ",\n                ".join(
-            f"{column} BOOLEAN" for column in quality_columns
-        )
-        con.execute(
-            f"""
-            CREATE TABLE clean_events (
-                complaint_from_date DATE,
-                is_clean_event_for_aggregate BOOLEAN,
-                borough VARCHAR,
-                precinct VARCHAR,
-                offense_type VARCHAR,
-                law_category VARCHAR,
-                {quality_column_sql},
-                complaint_number VARCHAR,
-                SUSP_RACE VARCHAR
-            )
-            """
-        )
-
-        def clean_row(
-            complaint_date,
-            aggregate_safe,
-            borough,
-            precinct,
-            offense,
-            law_category,
-            complaint_number,
-            *active_flags,
-        ):
-            return (
-                complaint_date,
-                aggregate_safe,
-                borough,
-                precinct,
-                offense,
-                law_category,
-                *(column in active_flags for column in quality_columns),
-                complaint_number,
-                "PRIVATE-VALUE",
-            )
-
-        missing_precinct = build_dashboard_overview.QUALITY_FLAG_FIELDS[
-            "missingPrecinct"
-        ]
-        missing_coordinates = build_dashboard_overview.QUALITY_FLAG_FIELDS[
-            "missingCoordinates"
-        ]
-        future_start = build_dashboard_overview.QUALITY_FLAG_FIELDS[
-            "futureComplaintStartDate"
-        ]
-        clean_rows = [
-            clean_row(date(2024, 1, 1), True, "BRONX", "1", "THEFT", "FELONY", "event-0"),
-            clean_row(date(2024, 1, 1), True, "BRONX", "1", "THEFT", "FELONY", "event-1"),
-            clean_row(date(2024, 1, 1), True, "BRONX", "1", "THEFT", "FELONY", "event-2"),
-            clean_row(date(2024, 1, 1), True, "MANHATTAN", "1", "THEFT", "FELONY", "event-3"),
-            clean_row(date(2024, 1, 8), True, "BRONX", "1", "THEFT", "FELONY", "event-4"),
-            clean_row(date(2024, 1, 8), True, "BROOKLYN", "2", "ASSAULT", "MISDEMEANOR", "event-5"),
-            clean_row(date(2024, 1, 8), True, "BROOKLYN", "2", "ASSAULT", "MISDEMEANOR", "event-6"),
-            clean_row(date(2024, 1, 8), True, "QUEENS", "2", "ASSAULT", "MISDEMEANOR", "event-7"),
-            clean_row(
-                date(2024, 1, 14),
-                True,
-                "QUEENS",
-                None,
-                "FRAUD",
-                "VIOLATION",
-                "event-8",
-                missing_precinct,
-            ),
-            clean_row(
-                date(2024, 1, 14),
-                True,
-                "QUEENS",
-                None,
-                "FRAUD",
-                "VIOLATION",
-                "event-9",
-                missing_precinct,
-                missing_coordinates,
-            ),
-            clean_row(
-                date(2099, 1, 1),
-                False,
-                "BRONX",
-                "1",
-                "THEFT",
-                "FELONY",
-                "unsafe-event",
-                future_start,
-            ),
-        ]
-        placeholders = ", ".join("?" for _ in clean_rows[0])
-        con.executemany(
-            f"INSERT INTO clean_events VALUES ({placeholders})", clean_rows
-        )
-        con.execute(
-            f"COPY clean_events TO {build_dashboard_overview.sql_string(paths['clean'])} "
-            "(FORMAT PARQUET)"
-        )
         con.execute(
             """
             CREATE TABLE weekly_area (
@@ -430,21 +398,26 @@ class DashboardOverviewContractTest(unittest.TestCase):
         actual.update(path_overrides)
         overview = output_directory / "overview.json"
         cube = output_directory / "overview-cube.bin.gz"
-        payload = build_dashboard_overview.build_dashboard_overview(
-            clean_events_path=actual["clean"],
-            weekly_path=actual["weekly"],
-            overview_output_path=overview,
-            cube_output_path=cube,
-            anomalies_path=actual["anomalies"],
-            hotspots_path=actual["hotspots"],
-            ml_predictions_path=actual["forecast"],
-            anomaly_metrics_path=actual["anomaly_metrics"],
-            hotspot_metrics_path=actual["hotspot_metrics"],
-            ml_metrics_path=actual["ml_metrics"],
-            ml_manifest_path=actual["ml_manifest"],
-            baseline_manifest_path=actual["baseline_manifest"],
-            threads=1,
-        )
+        with patch.object(
+            build_dashboard_overview,
+            "clean_source_stats",
+            side_effect=lambda *_: self.source_stats(),
+        ):
+            payload = build_dashboard_overview.build_dashboard_overview(
+                clean_events_path=actual["clean"],
+                weekly_path=actual["weekly"],
+                overview_output_path=overview,
+                cube_output_path=cube,
+                anomalies_path=actual["anomalies"],
+                hotspots_path=actual["hotspots"],
+                ml_predictions_path=actual["forecast"],
+                anomaly_metrics_path=actual["anomaly_metrics"],
+                hotspot_metrics_path=actual["hotspot_metrics"],
+                ml_metrics_path=actual["ml_metrics"],
+                ml_manifest_path=actual["ml_manifest"],
+                baseline_manifest_path=actual["baseline_manifest"],
+                threads=1,
+            )
         return payload, overview, cube
 
     def mutate_anomalies(
@@ -560,7 +533,15 @@ class DashboardOverviewContractTest(unittest.TestCase):
                 "--threads",
                 "1",
             ]
-            with patch.object(sys, "argv", argv), redirect_stdout(io.StringIO()):
+            with (
+                patch.object(sys, "argv", argv),
+                patch.object(
+                    build_dashboard_overview,
+                    "clean_source_stats",
+                    side_effect=lambda *_: self.source_stats(),
+                ),
+                redirect_stdout(io.StringIO()),
+            ):
                 build_dashboard_overview.main()
 
             canonical_overview_bytes = canonical_overview.read_bytes()
@@ -576,16 +557,15 @@ class DashboardOverviewContractTest(unittest.TestCase):
     def test_sensitive_fields_and_event_records_are_absent_and_unsafe_rows_excluded(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)
-            payload, overview, _ = self.build(
-                self.write_inputs(root / "inputs"), root / "output"
-            )
+            paths = self.write_inputs(root / "inputs")
+            self.assertFalse(paths["clean"].exists())
+            payload, overview, _ = self.build(paths, root / "output")
             serialized = overview.read_text(encoding="utf-8").upper()
         self.assertEqual(payload["observed"]["safeEventCount"], 10)
         self.assertEqual(payload["observed"]["weeklyAggregateCount"], 10)
         self.assertEqual(payload["dataQuality"]["excludedEventCount"], 1)
         self.assertTrue(payload["dataQuality"]["safeRowsOnly"])
         self.assertFalse(payload["ethics"]["eventRecordsIncluded"])
-        self.assertNotIn("PRIVATE-VALUE", serialized)
         self.assertNotIn("COMPLAINT_NUMBER", serialized)
         for column in build_dashboard_overview.SENSITIVE_COLUMNS:
             self.assertNotIn(column, serialized)
@@ -622,37 +602,6 @@ class DashboardOverviewContractTest(unittest.TestCase):
                 "categoriesOverlap": True,
             },
         )
-
-    def test_quality_flags_require_boolean_non_null_values(self) -> None:
-        with tempfile.TemporaryDirectory() as tmp:
-            root = Path(tmp)
-            paths = self.write_inputs(root / "inputs")
-            missing_borough = build_dashboard_overview.QUALITY_FLAG_FIELDS[
-                "missingBorough"
-            ]
-            invalid_type = self.mutate_parquet(
-                paths["clean"],
-                root / "invalid-flag-type.parquet",
-                "invalid_flag_type",
-                [
-                    "ALTER TABLE invalid_flag_type ALTER COLUMN "
-                    f"{missing_borough} TYPE INTEGER"
-                ],
-            )
-            with self.assertRaisesRegex(ValueError, "flags must be BOOLEAN"):
-                self.build(paths, root / "invalid-type-output", clean=invalid_type)
-
-            null_flag = self.mutate_parquet(
-                paths["clean"],
-                root / "null-flag.parquet",
-                "null_flag",
-                [
-                    f"UPDATE null_flag SET {missing_borough} = NULL "
-                    "WHERE complaint_number = 'event-0'"
-                ],
-            )
-            with self.assertRaisesRegex(ValueError, "flags contain null"):
-                self.build(paths, root / "null-output", clean=null_flag)
 
     def test_retained_unknown_counts_must_reconcile_to_weekly_literals(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:

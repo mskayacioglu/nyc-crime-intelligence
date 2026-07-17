@@ -13,7 +13,7 @@ use suspect/victim demographic fields.
 
 Install the runtime dependency before running:
 
-    python3 -m pip install duckdb
+    python -m pip install -r requirements.txt
 
 Example from the repository root:
 
@@ -192,8 +192,8 @@ def require_duckdb() -> Any:
         import duckdb  # type: ignore
     except ImportError as exc:
         raise SystemExit(
-            "Missing dependency: duckdb. Install it with `python3 -m pip install duckdb` "
-            "or run in an environment that already has DuckDB available."
+            "Missing dependency: duckdb. From the repository root, run "
+            "`python -m pip install -r requirements.txt`."
         ) from exc
     return duckdb
 

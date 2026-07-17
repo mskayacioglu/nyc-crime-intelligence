@@ -229,8 +229,8 @@ def require_duckdb() -> Any:
         import duckdb  # type: ignore
     except ImportError as exc:
         raise SystemExit(
-            "Missing dependency: duckdb. Install it with `python3 -m pip install duckdb` "
-            "or run in the local virtual environment if it already has DuckDB."
+            "Missing dependency: duckdb. From the repository root, run "
+            "`python -m pip install -r requirements.txt`."
         ) from exc
     return duckdb
 

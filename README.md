@@ -20,7 +20,7 @@ The repository currently includes these dashboard experiences:
 | Forecast | Precinct-level aggregate point estimates | Fixed week of 2026-01-05 |
 | Expected Change | Forecast minus the documented prior-only historical baseline | Same fixed forecast week |
 | Anomalies | Unusually high aggregate increases that have already been observed | Historical observed weeks |
-| Governance | Dataset/model coverage, quality warnings, lifecycle facts, readiness, and responsible-use limits | Published artifact scope, independent of dashboard filters |
+| Governance | Dataset/model coverage, quality warnings, lifecycle facts, readiness, and responsible-use limits | Dataset/model artifact scope, independent of dashboard filters |
 
 Overview, Map & Hotspots, Forecast, Expected Change, Anomalies, and Governance
 are implemented. Verified precinct rendering is also implemented and passes its
@@ -31,7 +31,7 @@ not delivered a successful activation to the application. Automated
 native-button coverage passes, and no alternate or synthetic browser mechanism
 is used to close that gate.
 
-## Published data and model context
+## Reviewed data and model context
 
 The current browser-safe artifacts describe:
 
@@ -46,7 +46,7 @@ The current browser-safe artifacts describe:
 The earlier 2005-12-26 bucket is a Monday boundary containing the first covered
 event on 2006-01-01. It does not claim that event coverage begins in 2005.
 
-The published model is `duckdb_lag_ensemble_regressor`, model version 1,
+The committed model manifest identifies `duckdb_lag_ensemble_regressor`, model version 1,
 artifact version 1. Its training-data window ends on 2025-12-29, and the model
 artifact was generated at `2026-07-05T12:40:05.068774+00:00`. No independent
 training-completion timestamp exists, so Governance reports **Not independently
@@ -59,11 +59,21 @@ errors are context for the full backtest and are not filter-specific guarantees.
 
 ## Prerequisites
 
-Running the committed dashboard requires npm and a Node.js version accepted by
-the locked Vite toolchain: `^20.19.0 || ^22.12.0 || >=24.0.0`. Python is not
-required merely to view the committed browser-safe artifacts. Rebuilding data,
-models, reports, or dashboard contracts requires Python 3 and the dependency in
-`requirements.txt`.
+The canonical builders and normal contract suite support Python 3.10 through
+3.14: DuckDB 1.5.4 declares Python 3.10 or newer, its package classifiers cover
+3.10–3.14, and the source uses Python 3.10 syntax. The separately pinned EDA
+environment supports Python 3.11 through 3.13; IPython 9.4.0, NumPy 2.3.1, and
+SciPy 1.16.0 require Python 3.11 or newer, while the pinned NumPy and PyArrow
+builds provide binary support through Python 3.13. The reproducibility target
+in `.python-version` is Python 3.11.15, which lies in both supported ranges and
+is the version used for the complete canonical verification run.
+
+The locked frontend dependency intersection supports Node.js
+`^20.19.0 || ^22.13.0 || >=24.0.0` and npm 10 or newer. `.nvmrc` selects the
+verified Node 24.5.0 target; the verified npm version is 11.12.1. Python is not
+needed merely to view the committed browser-safe artifacts. Rebuilding data,
+models, reports, or dashboard contracts requires the pinned Python dependency
+in `requirements.txt`.
 
 ## Quick start: run the dashboard
 
@@ -87,20 +97,22 @@ the return to Overview, Map & Hotspots, or Anomalies.
 Analytical rebuilds use Python and DuckDB:
 
 ```bash
-python3 -m venv .venv
+python3.11 -m venv .venv
 source .venv/bin/activate
 python -m pip install -r requirements.txt
 ```
 
-The current pinned Python dependency is DuckDB 1.5.4. Rebuilding analytical
+The core Python dependency is pinned to DuckDB 1.5.4. Rebuilding analytical
 artifacts also requires the raw complaint CSV described below. The raw dataset
 is large, is ignored by Git, and is never sent to the browser.
 
 The scripts under `src/` are the canonical reproducible build path. The
-notebooks are optional exploratory or wrapper documents. In particular,
-`notebooks/01_nypd_complaint_data_comprehensive_eda.ipynb` installs additional
-unversioned visualization/scientific packages and should be treated as a
-historical analysis environment, not as the production dependency lock.
+notebooks are optional exploratory or wrapper documents. The historical EDA
+notebook writes only under `.cache/eda/outputs` and cannot replace canonical
+artifacts. Its optional direct dependencies are version-pinned separately in
+`requirements-eda.txt`; install them with
+`python -m pip install -r requirements-eda.txt`. The cleaning notebook delegates
+to the canonical script and does not install packages from inside the notebook.
 
 ## Full analytical rebuild
 
@@ -126,6 +138,7 @@ repository root in dependency order:
 
 ```bash
 .venv/bin/python src/data/build_clean_dataset.py --as-of-date 2026-07-04
+.venv/bin/python src/analytics/build_dashboard_summary.py
 .venv/bin/python src/models/build_baseline_forecast.py
 .venv/bin/python src/models/build_ml_forecast.py
 .venv/bin/python src/analytics/build_hotspots.py
@@ -134,7 +147,7 @@ repository root in dependency order:
 
 These are full-data builds and can require substantial disk, memory, and run
 time. The explicit `--as-of-date 2026-07-04` reproduces the review horizon used
-by the published cleaning report; the CLI otherwise defaults to the viewer's
+by the reviewed cleaning report; the CLI otherwise defaults to the viewer's
 current date. Advance that value only as part of an intentional source refresh
 and record the new review horizon. For a non-destructive cleaning smoke test,
 use separate output paths as shown in
@@ -178,25 +191,34 @@ runtime contracts, failure behavior, and UI operation.
 
 ## Verification
 
-Run all Python contract tests from the repository root:
+After activating the Python environment, one command performs the normal local
+verification: Python contracts, documentation/link/language checks,
+privacy/path/notebook hygiene, a clean `npm ci`, lint, Vitest, the production
+build, the production dependency audit, `git diff --check`, and port 4173
+checks.
 
 ```bash
-.venv/bin/python -m unittest discover -s tests -p 'test_*_contract.py'
+./scripts/verify_local.sh
 ```
 
-Run frontend checks from `dashboard/`:
+The normal suite uses deterministic aggregate-only test inputs and the tracked
+browser-safe artifacts. It does not require `data/raw`, ignored
+`data/processed` files, or a local package cache. Tests fail when a required
+fixture or contract is absent; the primary suite does not skip because private
+data is unavailable.
+
+After completing the full analytical rebuild, add the explicit full-data
+artifact integration check with:
 
 ```bash
-npm run lint
-npm test
-npm run build
-npm audit --omit=dev
+./scripts/verify_local.sh --full-data
 ```
 
-At the Governance increment, the verified baseline is 99 Python contract tests
-and 212 Vitest tests across 15 files, with a zero-vulnerability production
-dependency audit. The practical dashboard checks cover 1280 × 900, 768 × 1024,
-and 390 × 844 viewports.
+That optional mode requires the ignored aggregate/model artifacts and private
+cleaned source. It reproduces the committed Forecast Map and Map JSON, Overview
+JSON, and compressed Overview cube in temporary paths and compares every output
+byte-for-byte. Practical dashboard checks cover 1280 × 900, 768 × 1024, and
+390 × 844 viewports.
 
 ## Repository layout
 
@@ -210,12 +232,15 @@ and 390 × 844 viewports.
 | `dashboard/` | React/Vite application, runtime decoders, tests, and public data |
 | `tests/` | Python contract and pipeline tests |
 | `reports/` | Methodology, phase implementation, verification, and limitation reports |
+| `scripts/verify_local.sh` | One-command normal verification and optional full-data integration mode |
 | `Roadmap.md` | Product roadmap and completed-increment status |
 
 ## Documentation map
 
 Start with:
 
+- [Final project report](reports/final_project_report.md) — end-to-end question,
+  provenance, methods, model, views, verification, limitations, and use bounds.
 - [Roadmap](Roadmap.md) — product scope, completed increments, and remaining
   work.
 - [Dashboard README](dashboard/README.md) — frontend architecture, operation,

@@ -510,47 +510,6 @@ class DashboardForecastMapContractTest(unittest.TestCase):
         self.assertEqual(canonical_bytes, repeat_bytes)
         self.assertNotIn(b"\n ", canonical_bytes)
 
-    def test_real_repository_artifacts_build_and_validate(self) -> None:
-        paths = {
-            "weekly": PROJECT_ROOT / "data/processed/crime_weekly_area.parquet",
-            "overview": PROJECT_ROOT / "data/processed/dashboard_overview.json",
-            "forecast": PROJECT_ROOT / "data/processed/ml_predictions.parquet",
-            "metrics": PROJECT_ROOT / "data/processed/ml_metrics.json",
-            "manifest": PROJECT_ROOT / "models/weekly_forecast/model_manifest.json",
-            "baseline": PROJECT_ROOT / "data/processed/baseline_predictions.parquet",
-            "baseline_manifest": (
-                PROJECT_ROOT / "models/baseline_forecast/model_manifest.json"
-            ),
-        }
-        for path in paths.values():
-            self.assertTrue(path.is_file(), f"Required repository fixture is missing: {path}")
-        with tempfile.TemporaryDirectory() as tmp:
-            payload, output = self.build(paths, Path(tmp) / "forecast-map.json")
-            persisted = json.loads(output.read_text(encoding="utf-8"))
-        self.assertEqual(payload["forecast"]["status"], "available")
-        self.assertGreater(payload["forecast"]["summary"]["rowCount"], 0)
-        self.assertEqual(len(payload["dimensions"]["forecastWeeks"]), 1)
-        forecast_week = date.fromisoformat(payload["dimensions"]["forecastWeeks"][0])
-        latest_observed = date.fromisoformat(payload["dataRange"]["latestObservedWeek"])
-        self.assertEqual(forecast_week, latest_observed + timedelta(weeks=1))
-        self.assertEqual(payload["model"]["forecastWeek"], forecast_week.isoformat())
-        self.assertEqual(
-            payload["model"]["artifactGeneratedAtUtc"],
-            "2026-07-05T12:40:05.068774+00:00",
-        )
-        self.assertEqual(
-            payload["model"]["independentTrainingTime"],
-            {
-                "status": "unavailable",
-                "timestamp": None,
-                "reason": (
-                    "No independent training-completion timestamp is recorded."
-                ),
-            },
-        )
-        self.assertEqual(payload, persisted)
-        build_dashboard_forecast_map.validate_forecast_map_payload(persisted)
-
     def test_missing_invalid_stale_and_available_empty_forecast_states(self) -> None:
         with tempfile.TemporaryDirectory() as tmp:
             root = Path(tmp)

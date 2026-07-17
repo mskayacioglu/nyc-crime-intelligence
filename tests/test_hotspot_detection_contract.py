@@ -1,5 +1,4 @@
 import importlib.util
-import tempfile
 import unittest
 from datetime import date, timedelta
 from pathlib import Path
@@ -15,11 +14,11 @@ SPEC.loader.exec_module(build_hotspots)
 
 
 class HotspotDetectionContractTest(unittest.TestCase):
-    def write_clean_input(self, con, clean_path: Path, rows: list[tuple]) -> None:
+    def create_aggregate_bin_input(self, con, bins: list[tuple]) -> None:
         con.execute(
-            """
-            CREATE TABLE clean_input (
-                complaint_from_date DATE,
+            f"""
+            CREATE TABLE {build_hotspots.HOTSPOT_INPUT_BIN_VIEW} (
+                bin_date DATE,
                 borough VARCHAR,
                 precinct VARCHAR,
                 offense_type VARCHAR,
@@ -29,28 +28,27 @@ class HotspotDetectionContractTest(unittest.TestCase):
                 flag_missing_coordinates BOOLEAN,
                 flag_zero_coordinates BOOLEAN,
                 flag_coordinates_outside_broad_nyc_bounds BOOLEAN,
-                is_clean_event_for_aggregate BOOLEAN
+                event_count BIGINT
             )
             """
         )
         con.executemany(
-            "INSERT INTO clean_input VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-            rows,
+            f"INSERT INTO {build_hotspots.HOTSPOT_INPUT_BIN_VIEW} "
+            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+            bins,
         )
-        con.execute(
-            f"COPY clean_input TO {build_hotspots.sql_string(clean_path)} (FORMAT PARQUET)"
-        )
+        build_hotspots.validate_aggregate_input_bins(con)
 
     def build_views(
         self,
-        clean_path: Path,
+        bins: list[tuple],
         config: build_hotspots.HotspotConfig | None = None,
         *,
         include_latest_date: bool = True,
     ):
         duckdb = build_hotspots.require_duckdb()
         con = duckdb.connect(database=":memory:")
-        build_hotspots.create_input_views(con, clean_path)
+        self.create_aggregate_bin_input(con, bins)
         min_event_date, max_event_date = build_hotspots.get_event_date_bounds(con)
         scoring_end_date = build_hotspots.compute_scoring_end_date(
             min_event_date,
@@ -63,6 +61,22 @@ class HotspotDetectionContractTest(unittest.TestCase):
         return con, windows
 
     def test_output_schema_contract(self) -> None:
+        self.assertEqual(
+            build_hotspots.HOTSPOT_INPUT_BIN_COLUMNS,
+            [
+                "bin_date",
+                "borough",
+                "precinct",
+                "offense_type",
+                "law_category",
+                "latitude",
+                "longitude",
+                "flag_missing_coordinates",
+                "flag_zero_coordinates",
+                "flag_coordinates_outside_broad_nyc_bounds",
+                "event_count",
+            ],
+        )
         self.assertEqual(
             build_hotspots.HOTSPOT_OUTPUT_COLUMNS,
             [
@@ -117,154 +131,203 @@ class HotspotDetectionContractTest(unittest.TestCase):
         self.assertEqual(overlap, set())
 
     def test_coordinate_filters_exclude_missing_zero_and_out_of_bounds(self) -> None:
-        duckdb = build_hotspots.require_duckdb()
-        with tempfile.TemporaryDirectory() as tmpdir:
-            clean_path = Path(tmpdir) / "clean.parquet"
-            con = duckdb.connect(database=":memory:")
-            rows = [
-                (
-                    date(2024, 4, 30),
-                    "BROOKLYN",
-                    "1",
-                    "THEFT",
-                    "MISDEMEANOR",
-                    40.7000,
-                    -73.9500,
-                    False,
-                    False,
-                    False,
-                    True,
-                ),
-                (
-                    date(2024, 4, 30),
-                    "BROOKLYN",
-                    "1",
-                    "THEFT",
-                    "MISDEMEANOR",
-                    None,
-                    None,
-                    True,
-                    False,
-                    False,
-                    True,
-                ),
-                (
-                    date(2024, 4, 30),
-                    "BROOKLYN",
-                    "1",
-                    "THEFT",
-                    "MISDEMEANOR",
-                    0.0,
-                    0.0,
-                    False,
-                    True,
-                    False,
-                    True,
-                ),
-                (
-                    date(2024, 4, 30),
-                    "BROOKLYN",
-                    "1",
-                    "THEFT",
-                    "MISDEMEANOR",
-                    41.2000,
-                    -73.9500,
-                    False,
-                    False,
-                    True,
-                    True,
-                ),
-                (
-                    date(2024, 4, 30),
-                    "BROOKLYN",
-                    "1",
-                    "THEFT",
-                    "MISDEMEANOR",
-                    40.7000,
-                    -72.0000,
-                    False,
-                    False,
-                    False,
-                    True,
-                ),
-            ]
-            self.write_clean_input(con, clean_path, rows)
+        bins = [
+            (
+                date(2024, 4, 30),
+                "BROOKLYN",
+                "1",
+                "THEFT",
+                "MISDEMEANOR",
+                40.7000,
+                -73.9500,
+                False,
+                False,
+                False,
+                3,
+            ),
+            (
+                date(2024, 4, 30),
+                "BROOKLYN",
+                "1",
+                "THEFT",
+                "MISDEMEANOR",
+                None,
+                None,
+                True,
+                False,
+                False,
+                4,
+            ),
+            (
+                date(2024, 4, 30),
+                "BROOKLYN",
+                "1",
+                "THEFT",
+                "MISDEMEANOR",
+                0.0,
+                0.0,
+                False,
+                True,
+                False,
+                5,
+            ),
+            (
+                date(2024, 4, 30),
+                "BROOKLYN",
+                "1",
+                "THEFT",
+                "MISDEMEANOR",
+                41.2000,
+                -73.9500,
+                False,
+                False,
+                True,
+                6,
+            ),
+            (
+                date(2024, 4, 30),
+                "BROOKLYN",
+                "1",
+                "THEFT",
+                "MISDEMEANOR",
+                40.7000,
+                -72.0000,
+                False,
+                False,
+                False,
+                7,
+            ),
+        ]
+        scored_con, _ = self.build_views(bins)
+        valid_count = scored_con.execute(
+            "SELECT COALESCE(SUM(event_count), 0) FROM valid_geo_bins"
+        ).fetchone()[0]
+        grid_recent_count = scored_con.execute(
+            """
+            SELECT SUM(recent_event_count)
+            FROM hotspot_candidates
+            WHERE hotspot_grain = 'grid'
+            """
+        ).fetchone()[0]
+        scored_con.close()
 
-            scored_con, _ = self.build_views(clean_path)
-            valid_count = scored_con.execute(
-                "SELECT COUNT(*) FROM valid_geo_events"
-            ).fetchone()[0]
-            grid_recent_count = scored_con.execute(
-                """
-                SELECT SUM(recent_event_count)
-                FROM hotspot_candidates
-                WHERE hotspot_grain = 'grid'
-                """
-            ).fetchone()[0]
+        self.assertEqual(valid_count, 3)
+        self.assertEqual(grid_recent_count, 3)
 
-        self.assertEqual(valid_count, 1)
-        self.assertEqual(grid_recent_count, 1)
+    def test_weighted_bins_preserve_counts_and_precinct_centroids(self) -> None:
+        bins = [
+            (
+                date(2024, 4, 30),
+                "BRONX",
+                "46",
+                "THEFT",
+                "FELONY",
+                40.7000,
+                -73.9500,
+                False,
+                False,
+                False,
+                3,
+            ),
+            (
+                date(2024, 4, 30),
+                "BRONX",
+                "46",
+                "THEFT",
+                "FELONY",
+                40.8000,
+                -73.8500,
+                False,
+                False,
+                False,
+                1,
+            ),
+        ]
+        scored_con, _ = self.build_views(bins)
+        centroid = scored_con.execute(
+            """
+            SELECT map_latitude, map_longitude, centroid_event_count
+            FROM precinct_centroids
+            WHERE borough = 'BRONX' AND precinct = '46'
+            """
+        ).fetchone()
+        precinct_count = scored_con.execute(
+            """
+            SELECT recent_event_count
+            FROM hotspot_candidates
+            WHERE hotspot_grain = 'precinct'
+                AND borough = 'BRONX'
+                AND precinct = '46'
+                AND offense_type = 'THEFT'
+                AND law_category = 'FELONY'
+            """
+        ).fetchone()[0]
+        input_summary = build_hotspots.build_input_summary(scored_con)
+        coordinate_quality = build_hotspots.build_coordinate_quality(scored_con)
+        scored_con.close()
+
+        self.assertEqual(centroid, (40.725, -73.925, 4))
+        self.assertEqual(precinct_count, 4)
+        self.assertEqual(input_summary["clean_aggregate_event_rows"], 4)
+        self.assertEqual(input_summary["valid_coordinate_event_rows"], 4)
+        self.assertEqual(coordinate_quality["aggregate_event_rows"], 4)
+        self.assertEqual(coordinate_quality["valid_coordinate_event_rows"], 4)
 
     def test_sparse_low_volume_cells_do_not_get_inflated_hotspot_severity(self) -> None:
-        duckdb = build_hotspots.require_duckdb()
-        with tempfile.TemporaryDirectory() as tmpdir:
-            clean_path = Path(tmpdir) / "clean.parquet"
-            con = duckdb.connect(database=":memory:")
-            rows = [
-                (
-                    date(2023, 12, 1),
-                    "QUEENS",
-                    "100",
-                    "RARE",
-                    "FELONY",
-                    40.7100,
-                    -73.8100,
-                    False,
-                    False,
-                    False,
-                    True,
-                ),
-                (
-                    date(2024, 4, 30),
-                    "QUEENS",
-                    "100",
-                    "RARE",
-                    "FELONY",
-                    40.7100,
-                    -73.8100,
-                    False,
-                    False,
-                    False,
-                    True,
-                ),
-            ]
-            self.write_clean_input(con, clean_path, rows)
+        bins = [
+            (
+                date(2023, 12, 1),
+                "QUEENS",
+                "100",
+                "RARE",
+                "FELONY",
+                40.7100,
+                -73.8100,
+                False,
+                False,
+                False,
+                2,
+            ),
+            (
+                date(2024, 4, 30),
+                "QUEENS",
+                "100",
+                "RARE",
+                "FELONY",
+                40.7100,
+                -73.8100,
+                False,
+                False,
+                False,
+                2,
+            ),
+        ]
+        config = build_hotspots.HotspotConfig(
+            min_grid_recent_count=5,
+            min_grid_baseline_count=5,
+            min_precinct_recent_count=5,
+            min_precinct_baseline_count=5,
+        )
+        scored_con, _ = self.build_views(bins, config)
+        row = scored_con.execute(
+            """
+            SELECT
+                recent_event_count,
+                baseline_event_count,
+                passes_volume_filter,
+                is_hotspot,
+                hotspot_severity
+            FROM hotspot_candidates
+            WHERE hotspot_grain = 'grid'
+                AND offense_type = 'RARE'
+                AND law_category = 'FELONY'
+            """
+        ).fetchone()
+        hotspot_count = scored_con.execute("SELECT COUNT(*) FROM hotspots").fetchone()[0]
+        scored_con.close()
 
-            config = build_hotspots.HotspotConfig(
-                min_grid_recent_count=5,
-                min_grid_baseline_count=5,
-                min_precinct_recent_count=5,
-                min_precinct_baseline_count=5,
-            )
-            scored_con, _ = self.build_views(clean_path, config)
-            row = scored_con.execute(
-                """
-                SELECT
-                    recent_event_count,
-                    baseline_event_count,
-                    passes_volume_filter,
-                    is_hotspot,
-                    hotspot_severity
-                FROM hotspot_candidates
-                WHERE hotspot_grain = 'grid'
-                    AND offense_type = 'RARE'
-                    AND law_category = 'FELONY'
-                """
-            ).fetchone()
-            hotspot_count = scored_con.execute("SELECT COUNT(*) FROM hotspots").fetchone()[0]
-
-        self.assertEqual(row[0], 1)
-        self.assertEqual(row[1], 1)
+        self.assertEqual(row[0], 2)
+        self.assertEqual(row[1], 2)
         self.assertFalse(row[2])
         self.assertFalse(row[3])
         self.assertEqual(row[4], "none")
@@ -307,73 +370,61 @@ class HotspotDetectionContractTest(unittest.TestCase):
         )
 
     def test_hotspot_output_view_contains_only_flagged_hotspots(self) -> None:
-        duckdb = build_hotspots.require_duckdb()
-        with tempfile.TemporaryDirectory() as tmpdir:
-            clean_path = Path(tmpdir) / "clean.parquet"
-            con = duckdb.connect(database=":memory:")
-            rows = []
-            for _ in range(5):
-                rows.append(
-                    (
-                        date(2024, 4, 30),
-                        "BRONX",
-                        "46",
-                        "DANGEROUS DRUGS",
-                        "MISDEMEANOR",
-                        40.8450,
-                        -73.9050,
-                        False,
-                        False,
-                        False,
-                        True,
-                    )
-                )
-            rows.append(
-                (
-                    date(2023, 12, 1),
-                    "BRONX",
-                    "46",
-                    "DANGEROUS DRUGS",
-                    "MISDEMEANOR",
-                    40.8450,
-                    -73.9050,
-                    False,
-                    False,
-                    False,
-                    True,
-                )
-            )
-            for _ in range(30):
-                rows.append(
-                    (
-                        date(2023, 12, 1),
-                        "BROOKLYN",
-                        "70",
-                        "PETIT LARCENY",
-                        "MISDEMEANOR",
-                        40.6450,
-                        -73.9550,
-                        False,
-                        False,
-                        False,
-                        True,
-                    )
-                )
-            self.write_clean_input(con, clean_path, rows)
-
-            config = build_hotspots.HotspotConfig(
-                min_grid_recent_count=1,
-                min_grid_baseline_count=1,
-                min_precinct_recent_count=1,
-                min_precinct_baseline_count=1,
-                min_recent_baseline_ratio=1.0,
-                min_hotspot_score=0.0,
-            )
-            scored_con, _ = self.build_views(clean_path, config)
-            total_hotspots = scored_con.execute("SELECT COUNT(*) FROM hotspots").fetchone()[0]
-            unflagged_hotspots = scored_con.execute(
-                "SELECT COUNT(*) FROM hotspots WHERE NOT is_hotspot"
-            ).fetchone()[0]
+        bins = [
+            (
+                date(2024, 4, 30),
+                "BRONX",
+                "46",
+                "DANGEROUS DRUGS",
+                "MISDEMEANOR",
+                40.8450,
+                -73.9050,
+                False,
+                False,
+                False,
+                5,
+            ),
+            (
+                date(2023, 12, 1),
+                "BRONX",
+                "46",
+                "DANGEROUS DRUGS",
+                "MISDEMEANOR",
+                40.8450,
+                -73.9050,
+                False,
+                False,
+                False,
+                1,
+            ),
+            (
+                date(2023, 12, 1),
+                "BROOKLYN",
+                "70",
+                "PETIT LARCENY",
+                "MISDEMEANOR",
+                40.6450,
+                -73.9550,
+                False,
+                False,
+                False,
+                30,
+            ),
+        ]
+        config = build_hotspots.HotspotConfig(
+            min_grid_recent_count=1,
+            min_grid_baseline_count=1,
+            min_precinct_recent_count=1,
+            min_precinct_baseline_count=1,
+            min_recent_baseline_ratio=1.0,
+            min_hotspot_score=0.0,
+        )
+        scored_con, _ = self.build_views(bins, config)
+        total_hotspots = scored_con.execute("SELECT COUNT(*) FROM hotspots").fetchone()[0]
+        unflagged_hotspots = scored_con.execute(
+            "SELECT COUNT(*) FROM hotspots WHERE NOT is_hotspot"
+        ).fetchone()[0]
+        scored_con.close()
 
         self.assertGreater(total_hotspots, 0)
         self.assertEqual(unflagged_hotspots, 0)
