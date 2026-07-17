@@ -330,6 +330,16 @@ Leaflet stay behind the existing lazy-loading boundary.
 - Loading, error, source-missing, valid-empty, stale, and historical-selection
   states have explicit non-map alternatives.
 
+## Current integration note
+
+This report is the historical Phase 7B snapshot. Its statements that the map
+lacks Forecast, Expected Change, and verified precinct polygons describe that
+milestone, not the current product. Those capabilities were added later; see
+the [Phase 7C.3 spatial report](phase_7c3_precinct_spatial_rendering.md), the
+[Anomalies report](dashboard_anomalies_view.md), and the
+[Governance report](dashboard_governance_view.md) for current behavior and
+remaining verification limits.
+
 ## Data-quality limitations
 
 - Hotspots describe aggregate concentration in reported complaint data, not

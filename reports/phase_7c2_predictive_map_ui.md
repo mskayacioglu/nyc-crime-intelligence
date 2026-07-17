@@ -91,6 +91,15 @@ mobile widths there was zero page horizontal overflow; mobile mode targets were
 44px and the canvas/detail were 333px wide. The browser console had no warnings
 or errors. The temporary Vite server was stopped.
 
+Current clarification: the phrase “keyboard focus/selection” above records the
+Phase 7C.2 report's original conclusion, but it is not evidence of a successful
+native Tab/Shift+Tab/Enter/Space activation. Later allowed-browser checks could
+focus a native precinct control and show its focus ring but could not deliver
+activation to the application. The exact remaining gate is documented in the
+[Phase 7C.3 report](phase_7c3_precinct_spatial_rendering.md), and Phase 7C.3
+remains verification-incomplete. This clarification does not close or weaken
+that blocker.
+
 The predictive implementation adds no dependency. The lazy Map JavaScript is
 188.47 kB / 54.46 kB gzip, about +18.26 / +4.47 kB versus the documented Phase
 7B baseline. Main JavaScript remains 226.15 / 71.34 kB gzip and Overview charts
@@ -113,6 +122,7 @@ official geometry reconciles exactly to all 78 Forecast location keys and is
 published through a separately validated browser contract. Forecast and
 Expected change now render verified administrative precinct MultiPolygons while
 retaining the full keyboard-accessible list/detail experience and explicit
-missing, invalid, incomplete, and mismatch states. See
-`reports/phase_7c3_precinct_spatial_rendering.md` for provenance, public-use
-assessment, processing, rendering semantics, safeguards, and verification.
+missing, invalid, incomplete, and mismatch states. See the
+[Phase 7C.3 report](phase_7c3_precinct_spatial_rendering.md) for provenance,
+public-use assessment, processing, rendering semantics, safeguards, and
+verification.

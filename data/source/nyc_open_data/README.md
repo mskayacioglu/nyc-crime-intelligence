@@ -1,5 +1,10 @@
 # NYC Police Precinct boundary source
 
+This file documents the vendored precinct-boundary source. The separate
+[NYPD Complaint Data Historic provenance note](nypd_complaint_data_historic.md)
+records the identity, checksum, known timestamp gap, and reproduction limits of
+the raw analytical source snapshot.
+
 `police_precincts_y76i-bdw7_26b.geojson` is the unmodified bulk GeoJSON
 export of New York City Department of City Planning's **Police Precincts**
 dataset, NYC Open Data identifier `y76i-bdw7`, edition 26B (May 2026).

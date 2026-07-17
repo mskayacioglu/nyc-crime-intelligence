@@ -8,12 +8,12 @@ This Phase 6A layer identifies unusually high aggregate weekly crime counts for 
 
 ## Inputs and Outputs
 
-- Input weekly_area: `/Users/mskayacioglu/Documents/projects/bir-nyc/data/processed/crime_weekly_area.parquet`
-- Input ml_predictions: `/Users/mskayacioglu/Documents/projects/bir-nyc/data/processed/ml_predictions.parquet`
-- Input ml_model_manifest: `/Users/mskayacioglu/Documents/projects/bir-nyc/models/weekly_forecast/model_manifest.json`
-- Output anomalies: `/Users/mskayacioglu/Documents/projects/bir-nyc/data/processed/anomalies.parquet`
-- Output metrics: `/Users/mskayacioglu/Documents/projects/bir-nyc/data/processed/anomaly_metrics.json`
-- Output report: `/Users/mskayacioglu/Documents/projects/bir-nyc/reports/anomaly_methodology.md`
+- Input weekly_area: `data/processed/crime_weekly_area.parquet`
+- Input ml_predictions: `data/processed/ml_predictions.parquet`
+- Input ml_model_manifest: `models/weekly_forecast/model_manifest.json`
+- Output anomalies: `data/processed/anomalies.parquet`
+- Output metrics: `data/processed/anomaly_metrics.json`
+- Output report: `reports/anomaly_methodology.md`
 
 ## Methodology
 
@@ -119,7 +119,7 @@ A segment-week can be flagged only when it has enough prior history, enough rece
 
 ## Hardest or Most Volatile Borough-Offense Groups
 
-These borough/offense groups have the largest average absolute historical residuals after the minimum-volume gate. Groups must have at least 52 evaluated segment-weeks and 100 actual complaints in this table. They are useful candidates for forecast-error monitoring before dashboard use.
+These borough/offense groups have the largest average absolute historical residuals after the minimum-volume gate. Groups must have at least 52 evaluated segment-weeks and 100 actual complaints in this table. They are useful candidates for ongoing forecast-error review; they are not filter-specific guarantees or policing priorities.
 
 | borough | offense_type | evaluated_segment_weeks | actual_event_count | anomaly_count | high_or_critical_anomaly_count | anomaly_rate_pct | avg_trailing_13_week_std | avg_abs_historical_residual | max_anomaly_score |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -149,7 +149,12 @@ These borough/offense groups have the largest average absolute historical residu
 | BROOKLYN | POSSESSION OF STOLEN PROPERTY | 104 | 512 | 33 | 9 | 31.7308 | 1.5039 | 3.3084 | 5.9466 |
 | STATEN ISLAND | OTHER OFFENSES RELATED TO THEFT | 61 | 498 | 13 | 3 | 21.3115 | 3.366 | 3.3077 | 5.1896 |
 
-## Limitations Before Dashboard Use
+## Historical pre-integration limitations
+
+This section records the analytical-layer review before dashboard integration.
+Anomalies are now integrated with the complete list/detail experience and the
+expected-count, residual, prior-volume, lifecycle, and limitation context
+described in the [current Anomalies report](dashboard_anomalies_view.md).
 
 - The layer identifies unusually high aggregate counts; it does not explain causality.
 - The latest source week may be partial depending on the upstream data extract.

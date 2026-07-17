@@ -269,7 +269,7 @@ patterns.
 
 The predictive workspace uses the established desktop/tablet/mobile stacking
 rules, minimum touch targets, overflow protections, and reduced-motion rules.
-At the 1280 × 900 override, the live Forecast map measured 853 × 586.125 pixels,
+At the 1280 × 900 override, the rendered Forecast map measured 853 × 586.125 pixels,
 reported 78 features, loaded all 20 visible tiles, had zero page-level
 horizontal overflow, and exposed no visible native control below 44 pixels. At
 768 × 1024, the map measured 693 × 467.25 pixels; the 341.5 × 540 detail and

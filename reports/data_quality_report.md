@@ -4,7 +4,9 @@ Generated at UTC: `2026-07-04T02:30:05.162635+00:00`
 
 ## Source
 
-- File: `/content/drive/MyDrive/bir-nyc/data/raw/NYPD_Complaint_Data_Historic.csv`
+- File: `data/raw/NYPD_Complaint_Data_Historic.csv`
+
+- Provenance: [reviewed NYC Open Data snapshot](../data/source/nyc_open_data/nypd_complaint_data_historic.md)
 
 - File size GB: `3.19`
 
@@ -74,6 +76,13 @@ Generated at UTC: `2026-07-04T02:30:05.162635+00:00`
 
 
 ## Date Quality
+
+This exploratory table compares parsed calendar dates only, so
+`to_date_before_from_date` is 77. The production cleaning rule prefers full
+start/end timestamps when both times parse and falls back to dates otherwise;
+that broader current contract flags 579 rows. Governance correctly uses the
+production cleaning count. These values describe different rules and must not
+be reconciled by subtraction or summation.
 
 |   row_count |   missing_or_invalid_from_date |   missing_or_invalid_to_date |   missing_or_invalid_report_date | min_from_date       | max_from_date       | min_to_date         | max_to_date         | min_report_date     | max_report_date     |   future_from_dates |   future_report_dates |   to_date_before_from_date |
 |------------:|-------------------------------:|-----------------------------:|---------------------------------:|:--------------------|:--------------------|:--------------------|:--------------------|:--------------------|:--------------------|--------------------:|----------------------:|---------------------------:|
@@ -165,7 +174,13 @@ Victim and suspect demographic columns are profiled for data quality only. They 
 | VIC_SEX        |    0.00305813 |                     6 |
 
 
-## Recommended Next Actions
+## Historical next actions
+
+The actions below were the recommendations at the exploratory-analysis
+milestone. They are now implemented by the deterministic cleaning, aggregate,
+forecast, hotspot, anomaly, and dashboard-contract pipeline. See the
+[project README](../README.md) for the current build order and the
+[Governance report](dashboard_governance_view.md) for current quality semantics.
 
 1. Normalize null-like values and invalid categories in a reproducible cleaning pipeline.
 

@@ -349,16 +349,27 @@ unrelated analytical definitions remain unchanged.
 
 ## Refresh and operation
 
-From the repository root, regenerate established analysis first, then the
-browser projections:
+From the repository root, use a full dependency-ordered refresh whenever the
+raw source, weekly aggregates, models, or hotspot/anomaly outputs change:
 
 ```bash
+.venv/bin/python src/data/build_clean_dataset.py --as-of-date 2026-07-04
+.venv/bin/python src/models/build_baseline_forecast.py
+.venv/bin/python src/models/build_ml_forecast.py
+.venv/bin/python src/analytics/build_hotspots.py
 .venv/bin/python src/analytics/build_anomalies.py
 .venv/bin/python src/analytics/build_dashboard_overview.py
 .venv/bin/python src/analytics/build_dashboard_map.py
 .venv/bin/python src/analytics/build_dashboard_forecast_map.py
 .venv/bin/python src/analytics/build_dashboard_precinct_spatial_reference.py
 ```
+
+When all established analytical artifacts and manifests are already current and
+only their browser-safe projections need restaging, run the four
+`build_dashboard_*` commands only. The [root README](../README.md) documents
+raw-source identity, environment setup, the full build, and the explicit
+cleaning review horizon. A projection-only refresh must not be used to conceal
+an older model, hotspot snapshot, or anomaly source.
 
 The Overview builder recomputes aggregate quality metadata from the established
 clean and weekly processed outputs. The Forecast Map builder reads the existing
@@ -372,6 +383,7 @@ For local operation:
 
 ```bash
 cd dashboard
+npm ci
 npm run dev -- --port 4173 --strictPort
 ```
 

@@ -8,12 +8,12 @@ This Phase 5 model reads `crime_weekly_area.parquet` and forecasts next-week `cr
 
 ## Inputs and Outputs
 
-- Input weekly_area: `/Users/mskayacioglu/Documents/projects/bir-nyc/data/processed/crime_weekly_area.parquet`
-- Input baseline_manifest: `/Users/mskayacioglu/Documents/projects/bir-nyc/models/baseline_forecast/model_manifest.json`
-- Output model_manifest: `/Users/mskayacioglu/Documents/projects/bir-nyc/models/weekly_forecast/model_manifest.json`
-- Output predictions: `/Users/mskayacioglu/Documents/projects/bir-nyc/data/processed/ml_predictions.parquet`
-- Output metrics: `/Users/mskayacioglu/Documents/projects/bir-nyc/data/processed/ml_metrics.json`
-- Output report: `/Users/mskayacioglu/Documents/projects/bir-nyc/reports/ml_model_report.md`
+- Input weekly_area: `data/processed/crime_weekly_area.parquet`
+- Input baseline_manifest: `models/baseline_forecast/model_manifest.json`
+- Output model_manifest: `models/weekly_forecast/model_manifest.json`
+- Output predictions: `data/processed/ml_predictions.parquet`
+- Output metrics: `data/processed/ml_metrics.json`
+- Output report: `reports/ml_model_report.md`
 
 ## Forecast Setup
 
@@ -143,7 +143,11 @@ Rows are filtered to segments with at least 50 actual backtest complaints.
 - Baseline comparison: The ML model beat the Phase 4 best baseline on MAE, RMSE, and weighted MAE.
 - Hardest segments: `BRONX / OTHER OFFENSES RELATED TO THEFT` is among the highest-error borough/offense groups after filtering for meaningful volume; these errors are concentrated in high-volume, volatile offense categories.
 - Important features and limitations: the strongest signal is short-term history from the prior 4 and 8 weeks, adjusted by last-week and 52-week references. The model does not yet include holidays, reporting-delay corrections, exogenous events, spatial spillover, or uncertainty intervals.
-- Before dashboard use: add prediction intervals, monitor drift by borough/offense, formalize retraining cadence, and expose model age and validation coverage next to forecasts.
+- Historical pre-integration recommendation: evaluate prediction intervals and
+  drift monitoring before treating the model as operational. The current
+  dashboard is a fixed historical/demo horizon, explicitly reports that no
+  prediction interval or formal drift/retraining cadence exists, and presents
+  model lifecycle plus overall validation context in Governance.
 
 ## Ethics Constraint
 

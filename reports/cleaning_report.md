@@ -4,7 +4,8 @@ Generated at UTC: `2026-07-04T18:23:29.485937+00:00`
 
 ## Source
 
-- File: `/Users/mskayacioglu/Documents/projects/bir-nyc/data/raw/NYPD_Complaint_Data_Historic.csv`
+- File: `data/raw/NYPD_Complaint_Data_Historic.csv`
+- Provenance: [reviewed NYC Open Data snapshot](../data/source/nyc_open_data/nypd_complaint_data_historic.md)
 - File size GB: `3.19`
 - Sample rows mode: `None`
 
@@ -17,13 +18,18 @@ A row is included in dashboard and modeling aggregates when `is_clean_event_for_
 - Broad NYC latitude bounds: `40.4774` to `40.9176`
 - Broad NYC longitude bounds: `-74.2591` to `-73.7004`
 
+The as-of date is an explicit reproducibility parameter, not the source
+retrieval time or the report-generation time. Pass `--as-of-date 2026-07-04`
+to reproduce this snapshot's quality flags. The independent source retrieval
+timestamp was not recorded and is not inferred from the local file timestamp.
+
 ## Outputs
 
-- Clean event parquet: `/Users/mskayacioglu/Documents/projects/bir-nyc/data/processed/complaints_clean.parquet`
-- Weekly aggregate parquet: `/Users/mskayacioglu/Documents/projects/bir-nyc/data/processed/crime_weekly_area.parquet`
-- Monthly aggregate parquet: `/Users/mskayacioglu/Documents/projects/bir-nyc/data/processed/crime_monthly_area.parquet`
-- Cleaning summary JSON: `/Users/mskayacioglu/Documents/projects/bir-nyc/data/processed/cleaning_summary.json`
-- Cleaning report: `/Users/mskayacioglu/Documents/projects/bir-nyc/reports/cleaning_report.md`
+- Clean event parquet: `data/processed/complaints_clean.parquet`
+- Weekly aggregate parquet: `data/processed/crime_weekly_area.parquet`
+- Monthly aggregate parquet: `data/processed/crime_monthly_area.parquet`
+- Cleaning summary JSON: `data/processed/cleaning_summary.json`
+- Cleaning report: `reports/cleaning_report.md`
 
 ## Overall Counts
 

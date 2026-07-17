@@ -8,11 +8,11 @@ This Phase 4 baseline reads `crime_weekly_area.parquet` and predicts the next we
 
 ## Inputs and Outputs
 
-- Input weekly_area: `/Users/mskayacioglu/Documents/projects/bir-nyc/data/processed/crime_weekly_area.parquet`
-- Output model_manifest: `/Users/mskayacioglu/Documents/projects/bir-nyc/models/baseline_forecast/model_manifest.json`
-- Output predictions: `/Users/mskayacioglu/Documents/projects/bir-nyc/data/processed/baseline_predictions.parquet`
-- Output metrics: `/Users/mskayacioglu/Documents/projects/bir-nyc/data/processed/baseline_metrics.json`
-- Output report: `/Users/mskayacioglu/Documents/projects/bir-nyc/reports/baseline_model_report.md`
+- Input weekly_area: `data/processed/crime_weekly_area.parquet`
+- Output model_manifest: `models/baseline_forecast/model_manifest.json`
+- Output predictions: `data/processed/baseline_predictions.parquet`
+- Output metrics: `data/processed/baseline_metrics.json`
+- Output report: `reports/baseline_model_report.md`
 
 ## Forecast Setup
 
@@ -139,7 +139,9 @@ Rows are filtered to segments with at least 50 actual backtest complaints.
 - Missing weeks are inferred as zero after first observation because the Phase 2 aggregate stores observed event groups, not a complete zero-filled panel.
 - The latest source week is excluded from backtesting by default because it may be partial; the next-week forecast still uses it as the latest available observation.
 - Baselines do not model holidays, reporting delays, structural breaks, spatial spillover, or long-run trend shifts.
-- Forecast intervals are not produced in Phase 4; Phase 5 should add uncertainty estimates before dashboard use.
+- Forecast intervals are not produced in Phase 4. This remains an explicit
+  current limitation: the published dashboard shows point estimates and
+  historical validation context without inventing an interval.
 
 ## Ethics Constraint
 

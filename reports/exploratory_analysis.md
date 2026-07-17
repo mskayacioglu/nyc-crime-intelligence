@@ -8,9 +8,9 @@ This Phase 3 analytical baseline reads the cleaned Phase 2 Parquet outputs and p
 
 ## Inputs
 
-- clean_events: `/Users/mskayacioglu/Documents/projects/bir-nyc/data/processed/complaints_clean.parquet`
-- weekly_area: `/Users/mskayacioglu/Documents/projects/bir-nyc/data/processed/crime_weekly_area.parquet`
-- monthly_area: `/Users/mskayacioglu/Documents/projects/bir-nyc/data/processed/crime_monthly_area.parquet`
+- clean_events: `data/processed/complaints_clean.parquet`
+- weekly_area: `data/processed/crime_weekly_area.parquet`
+- monthly_area: `data/processed/crime_monthly_area.parquet`
 
 ## Analysis Window
 

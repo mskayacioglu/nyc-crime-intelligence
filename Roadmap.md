@@ -1,106 +1,109 @@
 # Crime Intelligence Dashboard Roadmap
 
-## 1. Proje Amacı
+## 1. Project Objective
 
-Bu projenin amacı, NYPD Complaint Historic verisi üzerinden suç olaylarını zamansal ve coğrafi olarak analiz eden, kısa vadeli yoğunluk tahminleri üreten ve karar vericilere açıklanabilir içgörüler sunan bir crime intelligence dashboard geliştirmektir.
+The objective of this project is to develop a crime intelligence dashboard that analyzes crime incidents over time and geography using the historical NYPD Complaint dataset, produces short-term volume forecasts, and presents explainable insights to decision-makers.
 
-İlk ürün hedefi kişi odaklı tahmin yapmak değildir. Ürün, aşağıdaki operasyonel sorulara cevap vermelidir:
+The initial product objective is not to make person-level predictions. The product should answer the following operational questions:
 
-- Hangi bölgelerde suç yoğunluğu artıyor?
-- Hangi suç tipleri hangi zamanlarda yükseliyor?
-- Geçmiş trendlere göre gelecek hafta veya ay hangi bölgelerde yoğunluk bekleniyor?
-- Normalden sapma gösteren bölge/suç tipi kombinasyonları neler?
-- Harita üzerinde hotspot alanları nerede oluşuyor?
+- In which areas is crime volume increasing?
+- Which crime types increase at which times?
+- Based on historical trends, which areas are expected to have higher volume next week or next month?
+- Which area/crime-type combinations deviate from normal patterns?
+- Where do hotspot areas appear on the map?
 
-## 2. Mevcut Veri Durumu
+## 2. Current Data Status
 
-Projede başlangıç veri kaynağı:
+The project's initial data source is:
 
 ```text
 data/raw/NYPD_Complaint_Data_Historic.csv
 ```
 
-Veri yaklaşık 10 milyon satır ve 35 kolondan oluşmaktadır. Öne çıkan kolon grupları:
+The data contains approximately 10 million rows and 35 columns. Notable column groups include:
 
-- Olay tarihi ve saati: `CMPLNT_FR_DT`, `CMPLNT_FR_TM`, `CMPLNT_TO_DT`, `CMPLNT_TO_TM`, `RPT_DT`
-- Suç tipi ve kategori: `OFNS_DESC`, `PD_DESC`, `LAW_CAT_CD`, `KY_CD`, `PD_CD`
-- Konum: `BORO_NM`, `ADDR_PCT_CD`, `Latitude`, `Longitude`, `X_COORD_CD`, `Y_COORD_CD`
-- Mekan türü: `PREM_TYP_DESC`, `LOC_OF_OCCUR_DESC`, `JURIS_DESC`
-- Mağdur ve şüpheli demografisi: `VIC_AGE_GROUP`, `VIC_RACE`, `VIC_SEX`, `SUSP_AGE_GROUP`, `SUSP_RACE`, `SUSP_SEX`
+- Incident date and time: `CMPLNT_FR_DT`, `CMPLNT_FR_TM`, `CMPLNT_TO_DT`, `CMPLNT_TO_TM`, `RPT_DT`
+- Offense type and category: `OFNS_DESC`, `PD_DESC`, `LAW_CAT_CD`, `KY_CD`, `PD_CD`
+- Location: `BORO_NM`, `ADDR_PCT_CD`, `Latitude`, `Longitude`, `X_COORD_CD`, `Y_COORD_CD`
+- Premises type: `PREM_TYP_DESC`, `LOC_OF_OCCUR_DESC`, `JURIS_DESC`
+- Victim and suspect demographics: `VIC_AGE_GROUP`, `VIC_RACE`, `VIC_SEX`, `SUSP_AGE_GROUP`, `SUSP_RACE`, `SUSP_SEX`
 
-Demografik alanlar yüksek eksiklik ve etik risk içerdiği için ilk model girdisi olarak kullanılmamalıdır. Bu alanlar yalnızca veri kalite ve fairness incelemesi için değerlendirilmelidir.
+Because the demographic fields have high missingness and present ethical risks, they should not be used as inputs to the initial model. These fields should be evaluated only for data-quality and fairness reviews.
 
-## 3. Ürün İlkeleri
+## 3. Product Principles
 
-- Model birey, ırk, cinsiyet veya yaş grubu bazında suçluluk tahmini yapmayacaktır.
-- Dashboard karar destek aracı olarak tasarlanacaktır; otomatik yaptırım veya devriye kararı üretmeyecektir.
-- Model çıktıları her zaman geçmiş trend, güven aralığı ve veri kalitesi bağlamıyla birlikte gösterilecektir.
-- Öncelik açıklanabilir, denetlenebilir ve operasyonel olarak anlaşılır metriklerdir.
-- İlk sürümde mükemmel model yerine güvenilir veri pipeline'ı ve doğru problem tanımı hedeflenecektir.
+- The model will not predict criminality at the level of individuals, race, sex, or age group.
+- The dashboard will be designed as a decision-support tool; it will not generate automated enforcement or patrol decisions.
+- Model outputs will always be presented with historical trends, validated
+  uncertainty or historical-error context, and data-quality context. When an
+  interval is unavailable, the product must say so instead of inventing one.
+- Explainable, auditable, and operationally understandable metrics will take priority.
+- The first release will prioritize a reliable data pipeline and correct problem definition over a perfect model.
 
-## 4. MVP Kapsamı
+## 4. MVP Scope
 
-İlk MVP şu yetenekleri içermelidir:
+The first MVP should include the following capabilities:
 
-- Genel suç trendleri
-- Borough ve precinct bazlı karşılaştırma
-- Suç tipi dağılımı
-- Gün, hafta, ay ve saat bazlı desenler
-- Harita üzerinde suç yoğunluğu
-- Hotspot görünümü
-- Haftalık bölge/suç tipi bazlı olay sayısı tahmini
-- Beklenmeyen artışları gösteren anomali listesi
-- Modelin son eğitim tarihi, veri aralığı ve bilinen sınırlamaları
+- Overall crime trends
+- Borough- and precinct-level comparisons
+- Crime-type distribution
+- Patterns by day, week, month, and hour
+- Crime volume on a map
+- Hotspot view
+- Weekly incident-count forecasts by area and crime type
+- Anomaly list showing unexpected increases
+- The model's training-data range, artifact-generation time, independently
+  recorded training-time status, and known limitations
 
-MVP dışı bırakılacak konular:
+The following topics will be excluded from the MVP:
 
-- Kişi veya şüpheli profilleme
-- Gerçek zamanlı polis yönlendirme
-- Otomatik risk skoru ile yaptırım önerisi
-- Demografik gruplara göre suçluluk tahmini
+- Person or suspect profiling
+- Real-time police deployment
+- Enforcement recommendations based on automated risk scores
+- Criminality predictions by demographic group
 
-## 5. Faz 1: Veri Keşfi ve Kalite Analizi
+## 5. Phase 1: Data Exploration and Quality Analysis
 
-Amaç: Ham veriyi anlamak, riskli alanları tespit etmek ve modellemeye uygun veri sözlüğü çıkarmak.
+Objective: Understand the raw data, identify risky fields, and produce a data dictionary suitable for modeling.
 
-Yapılacaklar:
+Tasks:
 
-- CSV kolonlarının veri tiplerini çıkarmak
-- Tarih aralığını belirlemek
-- Satır sayısı, eksik değer oranları ve benzersiz değer sayılarını hesaplamak
-- `BORO_NM`, `ADDR_PCT_CD`, `OFNS_DESC`, `LAW_CAT_CD` dağılımlarını analiz etmek
-- Koordinatların geçerli NYC sınırları içinde olup olmadığını kontrol etmek
-- Hatalı tarih, saat, yaş grubu ve kategori değerlerini işaretlemek
-- Yıllara göre veri tutarlılığını incelemek
-- Veri kalite raporu üretmek
+- Determine the data types of the CSV columns
+- Determine the date range
+- Calculate the row count, missing-value rates, and unique-value counts
+- Analyze the distributions of `BORO_NM`, `ADDR_PCT_CD`, `OFNS_DESC`, and `LAW_CAT_CD`
+- Check whether coordinates fall within valid NYC boundaries
+- Flag invalid date, time, age-group, and category values
+- Examine data consistency by year
+- Produce a data-quality report
 
-Beklenen çıktı:
+Expected output:
 
 ```text
 reports/data_quality_report.md
 data/processed/schema_profile.json
 ```
 
-## 6. Faz 2: Temiz Veri ve Agregasyon Pipeline'ı
+## 6. Phase 2: Clean Data and Aggregation Pipeline
 
-Amaç: Ham olay verisini model ve dashboard için kullanılabilir hale getirmek.
+Objective: Make the raw incident data usable by the model and dashboard.
 
-Yapılacaklar:
+Tasks:
 
-- `CMPLNT_FR_DT` ve `CMPLNT_FR_TM` alanlarından standart olay zamanı üretmek
-- Boş, `(null)` ve geçersiz değerleri normalize etmek
-- Suç tipi kategorilerini sadeleştirmek
-- Borough, precinct ve koordinat alanlarını temizlemek
-- Olayları haftalık ve aylık zaman kovalarına gruplamak
-- Olay seviyesinden agregat model tablosu üretmek
+- Produce a standardized incident timestamp from `CMPLNT_FR_DT` and `CMPLNT_FR_TM`
+- Normalize empty, `(null)`, and invalid values
+- Simplify crime-type categories
+- Clean borough, precinct, and coordinate fields
+- Group incidents into weekly and monthly time buckets
+- Produce an aggregate modeling table from incident-level data
 
-Önerilen ana model tablosu:
+Proposed primary modeling table:
 
 ```text
 week_start | borough | precinct | offense_type | law_category | crime_count
 ```
 
-Beklenen çıktı:
+Expected output:
 
 ```text
 data/processed/complaints_clean.parquet
@@ -108,52 +111,52 @@ data/processed/crime_weekly_area.parquet
 data/processed/crime_monthly_area.parquet
 ```
 
-## 7. Faz 3: Analitik Baseline
+## 7. Phase 3: Analytical Baseline
 
-Amaç: Modelden önce dashboard'un temel analitik değerini oluşturmak.
+Objective: Establish the dashboard's core analytical value before modeling.
 
-Yapılacaklar:
+Tasks:
 
-- Yıllık, aylık ve haftalık suç trendlerini çıkarmak
-- Borough ve precinct bazlı sıralamalar oluşturmak
-- Suç tipi bazlı trendleri analiz etmek
-- Saat ve haftanın günü desenlerini çıkarmak
-- İlk heatmap ve yoğunluk analizini üretmek
-- En hızlı artan ve azalan suç tipi/bölge kombinasyonlarını belirlemek
+- Produce annual, monthly, and weekly crime trends
+- Create borough- and precinct-level rankings
+- Analyze trends by crime type
+- Produce hour-of-day and day-of-week patterns
+- Produce the first heatmap and volume analysis
+- Identify the fastest-increasing and fastest-decreasing crime-type/area combinations
 
-Beklenen çıktı:
+Expected output:
 
 ```text
 reports/exploratory_analysis.md
 data/processed/dashboard_summary.json
 ```
 
-## 8. Faz 4: Baseline Tahmin Modeli
+## 8. Phase 4: Baseline Forecasting Model
 
-Amaç: ML modelinden önce karşılaştırma yapılabilecek basit ve güçlü tahmin temelleri kurmak.
+Objective: Establish simple and strong forecasting baselines for comparison before developing an ML model.
 
-İlk hedef değişken:
+Initial target variable:
 
 ```text
-Belirli bir precinct veya borough içinde, belirli bir suç tipi için gelecek haftanın olay sayısı.
+The next week's incident count for a specific crime type within a specific precinct or borough.
 ```
 
-Baseline yaklaşımlar:
+Baseline approaches:
 
-- Geçen haftanın değerini tahmin olarak kullanmak
-- Son 4 haftanın ortalamasını kullanmak
-- Son 8 haftanın ağırlıklı ortalamasını kullanmak
-- Önceki yılın aynı haftasını referans almak
+- Use the previous week's value as the forecast
+- Use the average of the last 4 weeks
+- Use the weighted average of the last 8 weeks
+- Use the same week of the previous year as a reference
 
-Değerlendirme metrikleri:
+Evaluation metrics:
 
 - MAE
 - RMSE
 - Weighted MAE
-- Top-K yoğunluk yakalama oranı
-- Zaman bazlı backtesting sonucu
+- Top-K volume capture rate
+- Time-based backtesting results
 
-Beklenen çıktı:
+Expected output:
 
 ```text
 models/baseline_forecast/
@@ -161,24 +164,24 @@ reports/baseline_model_report.md
 data/processed/baseline_predictions.parquet
 ```
 
-## 9. Faz 5: Makine Öğrenmesi Modeli
+## 9. Phase 5: Machine-Learning Model
 
-Amaç: Baseline modelleri aşan, açıklanabilir ve operasyonel olarak kullanılabilir bir tahmin modeli geliştirmek.
+Objective: Develop an explainable and operationally usable forecasting model that outperforms the baseline models.
 
-Önerilen ilk model:
+Proposed initial model:
 
-- LightGBM veya XGBoost tabanlı regresyon modeli
+- A LightGBM- or XGBoost-based regression model
 
-Önerilen feature grupları:
+Proposed feature groups:
 
-- Zaman: hafta, ay, yıl, haftanın günü, sezon
-- Coğrafya: borough, precinct, patrol boro
-- Suç tipi: `OFNS_DESC`, `LAW_CAT_CD`
-- Gecikmeli değerler: son 1, 2, 4, 8 hafta olay sayıları
-- Rolling istatistikler: hareketli ortalama, standart sapma, minimum, maksimum
-- Trend sinyalleri: son 4 hafta değişim oranı, son 8 hafta değişim oranı
+- Time: week, month, year, day of week, season
+- Geography: borough, precinct, patrol borough
+- Crime type: `OFNS_DESC`, `LAW_CAT_CD`
+- Lagged values: incident counts from the last 1, 2, 4, and 8 weeks
+- Rolling statistics: rolling mean, standard deviation, minimum, maximum
+- Trend signals: rate of change over the last 4 weeks and the last 8 weeks
 
-Kullanılmaması önerilen ilk alanlar:
+Fields not recommended for initial use:
 
 - `SUSP_RACE`
 - `SUSP_SEX`
@@ -187,9 +190,9 @@ Kullanılmaması önerilen ilk alanlar:
 - `VIC_SEX`
 - `VIC_AGE_GROUP`
 
-Bu alanlar ilk modelde hem eksiklik hem de etik risk nedeniyle dışarıda tutulmalıdır.
+These fields should be excluded from the initial model because of both missingness and ethical risk.
 
-Beklenen çıktı:
+Expected output:
 
 ```text
 models/weekly_forecast/
@@ -197,25 +200,25 @@ reports/ml_model_report.md
 data/processed/ml_predictions.parquet
 ```
 
-## 10. Faz 6: Hotspot ve Anomali Katmanı
+## 10. Phase 6: Hotspot and Anomaly Layer
 
-Amaç: Dashboard'a tahmin dışında intelligence değeri sağlayan iki ayrı analitik katman eklemek.
+Objective: Add two distinct analytical layers that provide intelligence value beyond forecasting.
 
-Hotspot yaklaşımı:
+Hotspot approach:
 
-- Precinct bazlı yoğunluk skoru
-- Grid veya H3 bazlı yoğunluk skoru
-- Son 7, 30 ve 90 güne göre ağırlıklı yoğunluk
-- Suç tipi filtresiyle harita katmanı
+- Precinct-level density score
+- Grid- or H3-based density score
+- Density weighted over the last 7, 30, and 90 days
+- Map layer with a crime-type filter
 
-Anomali yaklaşımı:
+Anomaly approach:
 
-- Bölge/suç tipi bazlı tarihsel ortalamadan sapma
-- Rolling mean ve rolling standard deviation
-- Z-score veya robust z-score
-- Mevsimsel beklenen değerden sapma
+- Deviation from the historical mean by area/crime type
+- Rolling mean and rolling standard deviation
+- Z-score or robust z-score
+- Deviation from the seasonally expected value
 
-Beklenen çıktı:
+Expected output:
 
 ```text
 data/processed/hotspots.parquet
@@ -223,80 +226,83 @@ data/processed/anomalies.parquet
 reports/anomaly_methodology.md
 ```
 
-## 11. Faz 7: Dashboard Tasarımı
+## 11. Phase 7: Dashboard Design
 
-Amaç: Model ve analitik çıktılarını operasyonel olarak anlaşılır bir ürüne dönüştürmek.
+Objective: Turn model and analytical outputs into an operationally understandable product.
 
-Önerilen ekranlar:
+Proposed views:
 
 ### Overview
 
-- Toplam olay sayısı
-- Seçili tarih aralığına göre trend
-- En çok görülen suç tipleri
-- Borough karşılaştırması
-- Haftalık değişim göstergeleri
+- Total incident count
+- Trend for the selected date range
+- Most common crime types
+- Borough comparison
+- Weekly change indicators
 
 ### Map
 
 - Heatmap
-- Precinct veya grid katmanı
-- Suç tipi filtresi
-- Tarih aralığı filtresi
+- Precinct or grid layer
+- Crime-type filter
+- Date-range filter
 - Hotspot overlay
 
 ### Trends
 
-- Zaman serisi grafikleri
-- Suç tipi kırılımı
-- Borough/precinct karşılaştırması
-- Saat ve gün desenleri
+- Time-series charts
+- Crime-type breakdown
+- Borough/precinct comparison
+- Hourly and daily patterns
 
 ### Forecast
 
-- Gelecek hafta veya ay tahmini
-- Gerçekleşen vs tahmin grafiği
-- Güven aralığı
-- En yüksek artış beklenen bölgeler
+- Next-week or next-month forecast
+- Actual vs. forecast chart
+- Validated historical error context, with an explicit unavailable state when
+  the model does not provide a prediction interval
+- Areas with the highest expected increases
 
 ### Phase 7C — Predictive Map
 
-Durum: Phase 7C.1 — Forecast Map Data Contract ve Phase 7C.2 — Predictive Map UI
-& Integration tamamlandı. Phase 7C.3 — Verified Precinct Spatial Rendering
-uygulaması ve tüm otomatik kontroller tamamlandı. 1280 × 900, 768 × 1024 ve
-390 × 844 pratik responsive kontrolleri; spatial hata/stale/mismatch durumları,
-tile-failure dayanıklılığı ve temiz console/network kontrolleri geçti. Ancak
-in-app tarayıcının belgelenmiş klavye kanalları native liste düğmesini doğru
-odaklayıp görünür focus ring'i gösterdiği halde Enter/Space aktivasyon olayını
-sayfaya iletmedi. Başka bir tarayıcı yüzeyiyle policy aşılmadı; bu son pratik
-klavye kapısı başarıyla tekrar edilene kadar Phase 7C.3 verification-incomplete.
-NYC Department of City Planning / NYC Open Data'nın Mayıs 2026 26B Police
-Precincts kaynağı yeniden üretilebilir biçimde vendor edildi, gerçek Forecast
-sözleşmesindeki 78 `nypd-precinct:<label>` anahtarının tamamıyla bire bir
-doğrulandı ve Forecast ile Expected change modlarında aggregate precinct
-polygonları çizildi. Haritadan bağımsız tam klavye erişilebilir liste/detay yolu
-korundu; eksik, geçersiz veya uyumsuz spatial durumları sıfır ya da boş coğrafya
-olarak gösterilmez.
+Status: Phase 7C.1 — Forecast Map Data Contract and Phase 7C.2 — Predictive Map UI
+& Integration are complete. The Phase 7C.3 — Verified Precinct Spatial Rendering
+implementation and all automated checks are complete. Practical responsive checks
+at 1280 × 900, 768 × 1024, and 390 × 844 passed, as did checks for spatial
+error/stale/mismatch states, tile-failure resilience, and clean console/network
+activity. However, although
+the in-app browser's documented keyboard channels correctly focused the native
+list button and displayed its visible focus ring, they did not deliver the
+Enter/Space activation event to the page. Policy was not bypassed by using another
+browser surface; Phase 7C.3 remains verification-incomplete until this final
+practical keyboard gate is successfully repeated. The May 2026 26B Police
+Precincts source from the NYC Department of City Planning / NYC Open Data was
+vendored reproducibly, validated one-to-one against all 78
+`nypd-precinct:<label>` keys in the actual Forecast contract, and used to render
+aggregate precinct polygons in Forecast and Expected change modes. A complete,
+map-independent keyboard-accessible list/detail path was retained; missing,
+invalid, or incompatible spatial states are not represented as zero or empty
+geography.
 
-Amaç: Mevcut haftalık tahminleri coğrafi bağlama taşıyarak kullanıcıya yalnızca
-geçmiş yoğunlaşmaları değil, gelecek hafta için beklenen toplu olay hacmini ve
-tarihsel beklentiden farkını da göstermek.
+Objective: Place the existing weekly forecasts in geographic context so users
+can see not only historical concentrations, but also the expected aggregate
+incident volume for the next week and its difference from historical expectations.
 
-İlk teslim kapsamı:
+Initial delivery scope:
 
-- İlk tahmin ufku bir sonraki hafta olacaktır.
-- İlk coğrafi seviye precinct olacaktır; mevcut model çıktısı borough, precinct,
-  suç tipi ve law category anahtarlarını taşımaktadır.
-- Map ekranında **Hotspots**, **Forecast** ve **Expected change** katmanları
-  arasında geçiş yapılabilecektir.
-- Global tarih, borough, precinct, suç tipi ve law category filtreleri tahmin
-  katmanıyla aynı anlamı koruyacaktır.
-- Seçili precinct detayında tahmin edilen olay sayısı, tarihsel beklenti, sayı ve
-  yüzde farkı, tahmin haftası ve uygun model hata bağlamı gösterilecektir.
-- Harita kişi veya olay noktası değil, yalnızca aggregate precinct sinyali
-  gösterecektir.
+- The first forecast horizon will be the next week.
+- The first geographic level will be the precinct; the current model output
+  carries borough, precinct, crime-type, and law-category keys.
+- The Map view will allow switching among the **Hotspots**, **Forecast**, and
+  **Expected change** layers.
+- Global date, borough, precinct, crime-type, and law-category filters will
+  retain the same meaning in the forecast layer.
+- The selected precinct detail will show the predicted incident count, historical
+  expectation, absolute and percentage difference, forecast week, and appropriate
+  model-error context.
+- The map will show only aggregate precinct signals, not people or incident points.
 
-Frontend-safe çıktı:
+Frontend-safe output:
 
 ```text
 data/processed/dashboard_forecast_map.json
@@ -305,7 +311,7 @@ data/processed/dashboard_precinct_spatial_reference.json
 dashboard/public/data/precinct-spatial-reference.json
 ```
 
-Önerilen tahmin satırı:
+Proposed forecast row:
 
 ```text
 forecast_week
@@ -320,162 +326,169 @@ forecast_week
 | precinct_location_key
 ```
 
-Sözleşme ayrıca veri bitiş tarihi, tahmin üretim tarihi, desteklenen tahmin
-haftaları, backtest hata bağlamı, filtre boyutları ve aggregate-only güvenlik
-bayraklarını taşımalıdır. Tarayıcıya olay kaydı, kesin adres, şikâyet kimliği,
-kişi bilgisi veya demografik alan gönderilmemelidir.
+The contract should also include the data end date, forecast generation date,
+supported forecast weeks, backtest error context, filter dimensions, and
+aggregate-only safety flags. Incident records, exact addresses, complaint IDs,
+personal information, and demographic fields must not be sent to the browser.
 
-Doğrulama ve durum davranışı:
+Validation and state behavior:
 
-- Tahmin haftası son gözlem haftasından kesin olarak ileri olmalıdır.
-- Aynı hafta/precinct/suç/law anahtarı tekrar edemez.
-- Tahmin, baseline, fark ve hata değerleri sonlu ve savunulabilir olmalıdır.
-- Forecast, model manifesti ve Overview veri tarihi birbiriyle uyumlu olmalıdır.
-- Missing, invalid, stale, empty ve Overview/Forecast mismatch durumları ayrı
-  tutulmalı; uyumsuz tahmin güncelmiş gibi gösterilmemelidir.
-- Tarihsel filtre seçimi mevcut gelecek tahminini geçmişe aitmiş gibi
-  göstermemeli; desteklenmeyen kapsam nötr bir durum üretmelidir.
-- Mevcut model tahmin aralığı üretmediği sürece arayüz yalnızca point estimate ve
-  doğrulanmış backtest hata bağlamını göstermeli, güven aralığı üretmemelidir.
+- The forecast week must be strictly later than the last observed week.
+- A week/precinct/crime/law key must not be duplicated.
+- Forecast, baseline, difference, and error values must be finite and defensible.
+- The Forecast, model manifest, and Overview data dates must be mutually consistent.
+- Missing, invalid, stale, empty, and Overview/Forecast mismatch states must remain
+  distinct; an incompatible forecast must not be presented as current.
+- A historical filter selection must not make the current future forecast appear
+  historical; unsupported scope must produce a neutral state.
+- Unless the current model produces a prediction interval, the interface must show
+  only a point estimate and validated backtest error context, and must not generate
+  a confidence interval.
 
-Erişilebilirlik ve ürün dili:
+Accessibility and product language:
 
-- Tahmin farkı yalnızca renkle anlatılmamalıdır; yön, değer ve metin etiketi
-  birlikte kullanılmalıdır.
-- Tüm tahmin bölgeleri klavye erişilebilir bir listede bulunmalı ve harita
-  seçimiyle senkron kalmalıdır.
-- Dil, “gelecekte burada suç olacak” veya “riskli bölge” dememeli; “tarihsel
-  seviyenin üzerinde/altında toplu olay hacmi bekleniyor” biçiminde olmalıdır.
-- Model çıktısı otomatik devriye, yaptırım veya kişi düzeyi karar önerisi olarak
-  sunulmamalıdır.
+- Forecast differences must not be communicated by color alone; direction, value,
+  and a text label must be used together.
+- All forecast areas must be available in a keyboard-accessible list that remains
+  synchronized with map selection.
+- Language must not say "crime will occur here in the future" or "high-risk area";
+  it should say that "aggregate incident volume is expected to be above/below the
+  historical level."
+- Model output must not be presented as an automated patrol, enforcement, or
+  person-level decision recommendation.
 
-İlk sürüm dışı:
+Out of scope for the first release:
 
-- Grid seviyesinde tahmin
-- Aylık veya çoklu-horizon tahmin haritası
-- Gerçek zamanlı inference
-- Olay veya kişi seviyesinde tahmin
-- Otomatik enforcement/patrol önerisi
-- API veya deployment çalışması
+- Grid-level forecasting
+- Monthly or multi-horizon forecast maps
+- Real-time inference
+- Incident- or person-level prediction
+- Automated enforcement/patrol recommendations
+- API or deployment work
 
-Başarı kriteri:
+Success criteria:
 
-- Kullanıcı aynı Map ekranında geçmiş hotspot ile gelecek hafta tahminini açıkça
-  ayırabiliyor olmalıdır.
-- Precinct tahminleri mevcut global filtrelerle deterministik olarak eşleşmelidir.
-- Tahmin, baseline ve expected change değerleri aynı frontend-safe sözleşmeden
-  gelmelidir.
-- Loader; duplicate, future-horizon, malformed, stale ve tarih uyumsuzluğu
-  kontrollerini testlerle uygulamalıdır.
-- Forecast katmanı masaüstü, tablet, mobil ve klavye kullanımında hotspot
-  davranışını bozmamalıdır.
-- Resmî precinct geometrisi tüm 78 tahmin anahtarıyla tam ve benzersiz
-  eşleşmeli; checksum, provenance, CRS, ring yapısı, NYC sınırları ve
-  aggregate-safe alan kısıtları hem build hem tarayıcı sınırında doğrulanmalıdır.
+- Users must be able to distinguish clearly between historical hotspots and the
+  next-week forecast within the same Map view.
+- Precinct forecasts must match the existing global filters deterministically.
+- Forecast, baseline, and expected-change values must come from the same
+  frontend-safe contract.
+- The loader must enforce duplicate, future-horizon, malformed, stale, and
+  date-mismatch checks through tests.
+- The Forecast layer must not break hotspot behavior on desktop, tablet, mobile,
+  or during keyboard use.
+- Official precinct geometry must match all 78 forecast keys completely and
+  uniquely; checksum, provenance, CRS, ring structure, NYC bounds, and
+  aggregate-safe field restrictions must be validated at both build and browser
+  boundaries.
 
 ### Anomalies
 
-Durum: tamamlandı. Ayrı **Anomalies** görünümü, geleceğe dönük tahmin veya
-hotspot yoğunluğu yerine zaten gözlemlenmiş haftalık aggregate artışları
-gösterir. Yeni bir anomali tanımı ya da tarayıcı artifact'i üretilmedi;
-mevcut `crime_weekly_area.parquet` -> `anomalies.parquet` /
-`anomaly_metrics.json` -> `dashboard_overview.json` zinciri ve
-`overview.json` içindeki frontend-safe yüksek/kritik sinyaller kullanıldı.
+Status: complete. The separate **Anomalies** view displays already-observed weekly
+aggregate increases rather than forward-looking forecasts or hotspot intensity. No
+new anomaly definition or browser artifact was produced; the existing
+`crime_weekly_area.parquet` -> `anomalies.parquet` /
+`anomaly_metrics.json` -> `dashboard_overview.json` chain and the frontend-safe
+high/critical signals in `overview.json` were used.
 
-Teslim edilen deneyim:
+Delivered experience:
 
-- Anomali haftası, borough, precinct, suç tipi ve law category birlikte
-  gösterilir.
-- Gözlemlenen aggregate sayı; leakage-safe tarihsel hafta backtest tahmini
-  varsa onunla, yoksa yalnızca önceki 13 haftanın ortalamasıyla karşılaştırılır.
-- İşaretli sapma, yön metni, mevcut anomaly score ve yüksek/kritik analitik
-  sinyal önceliği birlikte gösterilir; yön veya önem yalnızca renkle kodlanmaz.
-- Sıralama critical, high, score, hafta ve kararlı aggregate kimliği üzerinden
-  deterministiktir. Öncelik etiketi suç ciddiyeti, polis önceliği, devriye ya da
-  yaptırım önerisi değildir.
-- Global tarih, borough, precinct, offense ve law filtreleri Overview ile aynı
-  semantics'i kullanır; borough precinct seçeneklerini sınırlar ve Reset
-  varsayılan tamamlanmış hafta aralığını geri getirir.
-- Native düğmelerden oluşan eksiksiz liste, görünür seçim, `aria-pressed`, canlı
-  detay ve kararlı ilk seçim aynı state'i paylaşır. Eksik, geçersiz, stale,
-  uyumsuz, kaynak-empty, filtrelenmiş-empty, loading ve network-error durumları
-  sıfır değer üretilmeden ayrılır.
-- 1280 x 900, 768 x 1024 ve 390 x 844 kontrollerinde sayfa düzeyinde yatay
-  taşma yoktur; mobil kontroller en az 44 px'dir.
+- The anomaly week, borough, precinct, crime type, and law category are shown
+  together.
+- The observed aggregate count is compared with the leakage-safe historical-week
+  backtest prediction when available; otherwise, it is compared only with the
+  average of the previous 13 weeks.
+- Signed deviation, direction text, the existing anomaly score, and high/critical
+  analytical-signal priority are shown together; direction and importance are not
+  encoded by color alone.
+- Sorting is deterministic by critical, high, score, week, and stable aggregate
+  identity. The priority label is not a measure of crime severity or police
+  priority, nor is it a patrol or enforcement recommendation.
+- Global date, borough, precinct, offense, and law filters use the same semantics
+  as Overview; borough limits the available precinct options, and Reset restores
+  the default completed-week range.
+- The complete list of native buttons, visible selection, `aria-pressed`, live
+  detail, and stable initial selection share the same state. Missing, invalid,
+  stale, incompatible, source-empty, filtered-empty, loading, and network-error
+  states remain distinct without producing zero values.
+- At 1280 x 900, 768 x 1024, and 390 x 844, there is no page-level horizontal
+  overflow; mobile controls are at least 44 px.
 
-Mevcut in-app tarayıcı native düğmeyi odaklayıp görünür focus ring'i gösterdi,
-ancak gerçek Tab/Enter/Space olaylarını uygulamaya iletmedi. Uygulamaya özel
-klavye handler'ı eklenmedi; native kontrol davranışı otomatik regresyon
-testleriyle doğrulandı. Bu araç sınırlaması yukarıdaki ayrı Phase 7C.3
-verification-incomplete kapısını değiştirmez veya kapatmaz.
+The current in-app browser focused the native button and displayed a visible
+focus ring, but did not deliver actual Tab/Enter/Space events to the application.
+No application-specific keyboard handler was added; native-control behavior was
+validated with automated regression tests. This tool limitation does not change
+or close the separate Phase 7C.3 verification-incomplete gate described above.
 
-Uygulama, veri sözleşmesi, doğrulama ve sınırlar
-`reports/dashboard_anomalies_view.md` içinde kaydedildi.
+The implementation, data contract, validation, and boundaries are documented in
+`reports/dashboard_anomalies_view.md`.
 
 ### Governance
 
-Durum: tamamlandı. Ayrı ve lazy-loaded **Governance** görünümü, filtreye bağlı
-ürün ekranlarını geliştirme metadata'sıyla doldurmadan, yayımlanmış aggregate
-artifact'lerin kapsamını, veri kalitesini, model yaşam döngüsünü, analitik
-hazırlık durumlarını ve sorumlu kullanım sınırlarını tek bir chartsız yolda
-gösterir. Overview içindeki kısa **About the data** açıklaması bilinçli olarak
-değiştirilmedi; Governance global filtre toolbar'ını göstermez ve değerlerin
-aktif filtrelenmiş dilimi değil, veri/model genelindeki yayımlanmış artifact'leri
-anlattığını açıklar.
+Status: complete. The separate, lazy-loaded **Governance** view presents the scope,
+data quality, model lifecycle, analytical-readiness states, and responsible-use
+boundaries of the published aggregate artifacts in a single chart-free route,
+without filling filter-dependent product views with development metadata. The
+short **About the data** explanation in Overview was intentionally left unchanged;
+Governance does not show the global filter toolbar and explains that its values
+describe the published data/model artifacts as a whole, not the currently active
+filtered slice.
 
-Teslim edilen deneyim:
+Delivered experience:
 
-- Olay kapsamı 2006-01-01–2025-12-31, Monday bucket kapsamı
-  2005-12-26–2025-12-29, son tamamlanmış hafta 2025-12-22 ve 2025-12-29 ile
-  başlayan son haftanın partial olduğu ayrı anlamlarla gösterilir. Önceki bucket
-  tarihinin 2006'dan önce olay olduğu anlamına gelmediği açıklanır.
-- 10.071.507 temiz kaynak satırı, 10.049.687 aggregate-safe dahil satır ve
-  21.820 hariç satır birbirleriyle doğrulanır. Kaynak kalite bayrakları ile
-  aggregate-safe `UNKNOWN` boyut sayıları ayrı popülasyonlar olarak sunulur;
-  örtüşen kalite kategorileri toplanmaz ve `UNKNOWN` değerler otomatik olarak
-  hariç tutulmuş sayılmaz.
-- Model, insan tarafından okunur adıyla ve yayımlanmış
-  `duckdb_lag_ensemble_regressor` kimliğiyle gösterilir; model/artifact sürümü
-  1'dir. Eğitim verisi aralığı 2005-12-26–2025-12-29, artifact üretim zamanı
-  `2026-07-05T12:40:05.068774+00:00` ve sabit demo tahmin haftası 2026-01-05
-  ayrı alanlardır. Bağımsız bir eğitim-tamamlanma zamanı bulunmadığı için
-  **Not independently recorded** gösterilir; artifact üretim zamanı “last
-  trained” olarak yeniden etiketlenmez.
-- Genel backtest MAE/RMSE/weighted MAE/coverage bilgisi yalnızca tarihsel model
-  bağlamı olarak gösterilir; aktif filtrelere özel hata, garanti veya belirsizlik
-  aralığı gibi sunulmaz. Tahminlerin point estimate olduğu ve prediction interval
-  bulunmadığı görünürdür.
-- Hotspots, Anomalies, Forecast, Expected Change ve precinct boundary hazırlığı
-  semantik olarak ayrı tutulur. Available, partial, empty, missing, invalid,
-  stale, incompatible ve unavailable durumları metin etiketleri ve sterilize
-  nedenlerle gösterilir; eksik çıktı sıfır ya da “healthy” olarak sunulmaz.
-- Şikâyet kayıtlarının nedensel gerçek olmadığı; gecikme, revizyon ve sınıflama
-  değişikliklerinin aggregate'leri etkileyebildiği; partial haftanın tamamlanmış
-  haftalarla doğrudan karşılaştırılamayacağı; tahminin canlı/gerçek zamanlı
-  operasyonel yönlendirme olmadığı; drift monitor veya genel retraining cadence
-  bulunmadığı açıklanır.
-- Yalnızca aggregate analiz kullanılır. Demografi, kişi düzeyi skor, bireysel
-  risk etiketi, devriye/yaptırım/dağıtım/müdahale önerisi yoktur ve analitik
-  sinyal önceliği policing priority olarak çerçevelenmez.
-- Dört native navigation düğmesi kararlı sırayı, görünür `aria-current`
-  seçimini, skip-link hedefini ve global filtre state'ini korur. Governance
-  turundan sonra tarih, borough, precinct, offense ve law seçimleri değişmeden
-  kalır; filtreli ekranlardaki borough–precinct kısıtı ve Reset davranışı
-  korunur. Mobil navigation ikiye iki grid olarak yerleşir ve native
-  etkileşim hedefleri en az 44 px'dir.
+- The incident coverage of 2006-01-01–2025-12-31, Monday-aligned bucket coverage of
+  2005-12-26–2025-12-29, latest complete week of 2025-12-22, and partial status of
+  the final week beginning 2025-12-29 are shown with distinct meanings. It is
+  explained that the pre-2006 bucket date does not imply that incidents occurred
+  before 2006.
+- The 10,071,507 clean source rows, 10,049,687 included aggregate-safe rows, and
+  21,820 excluded rows are reconciled. Source-quality flags and aggregate-safe
+  `UNKNOWN` dimension counts are presented as separate populations; overlapping
+  quality categories are not summed, and `UNKNOWN` values are not assumed to have
+  been excluded automatically.
+- The model is displayed by its human-readable name and published
+  `duckdb_lag_ensemble_regressor` identifier; the model/artifact version is 1.
+  The training-data range of 2005-12-26–2025-12-29, artifact-generation time of
+  `2026-07-05T12:40:05.068774+00:00`, and fixed demo forecast week of 2026-01-05
+  are separate fields. Because no independent training-completion time exists,
+  **Not independently recorded** is shown; the artifact-generation time is not
+  relabeled as "last trained."
+- Overall backtest MAE/RMSE/weighted MAE/coverage information is shown only as
+  historical model context; it is not presented as active-filter-specific error,
+  a guarantee, or an uncertainty interval. It is visible that forecasts are point
+  estimates and that no prediction interval is available.
+- Hotspots, Anomalies, Forecast, Expected Change, and precinct-boundary readiness
+  remain semantically distinct. Available, partial, empty, missing, invalid,
+  stale, incompatible, and unavailable states are shown with text labels and
+  sanitized reasons; missing output is not presented as zero or "healthy."
+- It is explained that complaint records are not causal truth; that delays,
+  revisions, and classification changes can affect aggregates; that a partial week
+  cannot be compared directly with complete weeks; that the forecast is not live
+  or real-time operational guidance; and that no drift monitor or general
+  retraining cadence exists.
+- Only aggregate analysis is used. There are no demographics, person-level scores,
+  individual risk labels, or patrol/enforcement/deployment/intervention
+  recommendations, and analytical-signal priority is not framed as policing
+  priority.
+- The four native navigation buttons retain their stable order, visible
+  `aria-current` selection, skip-link target, and global filter state. Date,
+  borough, precinct, offense, and law selections remain unchanged after a visit to
+  Governance; the borough–precinct constraint and Reset behavior on filtered views
+  are preserved. Mobile navigation uses a two-by-two grid, and native interaction
+  targets are at least 44 px.
 
-Governance için yeni bir paralel browser artifact'i üretilmedi. Mevcut Overview
-metadata sözleşmesine yalnızca deterministik aggregate kalite alanları,
-Forecast Map model sözleşmesine ise ayrı artifact-generation ve bağımsız
-training-time-unavailable alanları eklendi. Canonical/public kopyalar aynı
-builder'lardan üretilir; TypeScript runtime projection bu sözleşmeleri Map ve
-resmî spatial artifact'leriyle fail-closed biçimde uzlaştırır. Uygulama, veri
-kaynakları, failure davranışı, doğrulama ve gerçek sınırlamalar
-`reports/dashboard_governance_view.md` içinde kaydedildi.
+No new parallel browser artifact was produced for Governance. Only deterministic
+aggregate-quality fields were added to the existing Overview metadata contract,
+while separate artifact-generation and independent-training-time-unavailable
+fields were added to the Forecast Map model contract. Canonical/public copies are
+generated by the same builders; the TypeScript runtime projection reconciles these
+contracts with the Map and official spatial artifacts in a fail-closed manner.
+The implementation, data sources, failure behavior, validation, and actual
+limitations are documented in `reports/dashboard_governance_view.md`.
 
-## 12. Önerilen Teknik Mimari
+## 12. Proposed Technical Architecture
 
-Başlangıç için pratik mimari:
+A practical initial architecture:
 
 ```text
 Raw CSV
@@ -487,17 +500,17 @@ Raw CSV
   -> Dashboard
 ```
 
-Önerilen araçlar:
+Proposed tools:
 
-- Veri işleme: DuckDB, Polars veya PySpark
-- Modelleme: scikit-learn, LightGBM, XGBoost
+- Data processing: DuckDB, Polars, or PySpark
+- Modeling: scikit-learn, LightGBM, XGBoost
 - API: FastAPI
-- Dashboard: React veya Next.js
-- Harita: Mapbox GL, Deck.gl veya Leaflet
-- Depolama: Parquet ile başlangıç, ileride Postgres/PostGIS
-- Deney takibi: MLflow veya basit model registry dosya yapısı
+- Dashboard: React or Next.js
+- Map: Mapbox GL, Deck.gl, or Leaflet
+- Storage: start with Parquet, then move to Postgres/PostGIS if needed
+- Experiment tracking: MLflow or a simple model-registry directory structure
 
-## 13. Önerilen Repo Yapısı
+## 13. Proposed Repository Structure
 
 ```text
 data/
@@ -515,163 +528,176 @@ models/
 reports/
 ```
 
-## 14. Sprint Planı
+## 14. Sprint Plan
 
-### Sprint 1: Veri Profiling
+### Sprint 1: Data Profiling
 
-- Veri sözlüğü çıkar
-- Eksik değer analizi yap
-- Tarih ve lokasyon kalite kontrollerini çalıştır
-- İlk veri kalite raporunu üret
+- Produce the data dictionary
+- Perform missing-value analysis
+- Run date and location quality checks
+- Produce the initial data-quality report
 
-Başarı kriteri:
+Success criterion:
 
-- Hangi kolonların güvenilir, eksik veya riskli olduğu netleşmiş olmalı.
+- The reliable, incomplete, and risky columns should be clearly identified.
 
-### Sprint 2: Temizleme ve Agregasyon
+### Sprint 2: Cleaning and Aggregation
 
-- Temiz olay tablosu üret
-- Haftalık bölge/suç tipi agregasyonunu oluştur
-- Dashboard için özet metrikleri hazırla
+- Produce the clean incident table
+- Create the weekly area/crime-type aggregation
+- Prepare summary metrics for the dashboard
 
-Başarı kriteri:
+Success criterion:
 
-- Model ve dashboard aynı temizlenmiş tablodan beslenebilir hale gelmeli.
+- The model and dashboard should be able to use the same cleaned table.
 
-### Sprint 3: İlk Analitik Dashboard Prototipi
+### Sprint 3: Initial Analytical Dashboard Prototype
 
-- Trend grafikleri
-- Borough/precinct karşılaştırmaları
-- Suç tipi dağılımları
-- İlk harita görünümü
+- Trend charts
+- Borough/precinct comparisons
+- Crime-type distributions
+- Initial map view
 
-Başarı kriteri:
+Success criterion:
 
-- Model olmadan bile veri keşfi yapılabilecek bir dashboard prototipi olmalı.
+- A dashboard prototype should support data exploration even without a model.
 
 ### Sprint 4: Baseline Forecast
 
-- Baseline tahmin yöntemlerini kur
-- Backtesting yap
-- Metrikleri raporla
-- Tahmin çıktılarını dashboard formatına getir
+- Implement baseline forecasting methods
+- Perform backtesting
+- Report the metrics
+- Convert forecast outputs into dashboard format
 
-Başarı kriteri:
+Success criterion:
 
-- Gelecek hafta suç sayısı için karşılaştırılabilir baseline metrikleri oluşmalı.
+- Comparable baseline metrics should be available for next-week crime counts.
 
 ### Sprint 5: ML Forecast Model
 
-- Feature pipeline kur
-- İlk LightGBM/XGBoost modelini eğit
-- Baseline ile karşılaştır
-- Tahmin sonuçlarını kaydet
+- Build the feature pipeline
+- Train the initial LightGBM/XGBoost model
+- Compare it with the baselines
+- Save the forecast results
 
-Başarı kriteri:
+Success criterion:
 
-- ML modeli baseline'dan anlamlı şekilde iyi veya en azından açıklanabilir şekilde karşılaştırılmış olmalı.
+- The ML model should either perform meaningfully better than the baselines or be
+  compared with them in an explainable way.
 
-### Sprint 6: Hotspot ve Anomaly
+### Sprint 6: Hotspot and Anomaly
 
-- Hotspot skorlarını üret
-- Anomali kurallarını tanımla
-- Harita ve anomali ekranlarına veri sağla
+- Produce hotspot scores
+- Define anomaly rules
+- Provide data to the map and anomaly views
 
-Başarı kriteri:
+Success criterion:
 
-- Dashboard yalnızca geçmişi göstermemeli, dikkat edilmesi gereken değişimleri de öne çıkarmalı.
+- The dashboard should not only show the past; it should also highlight changes
+  that warrant attention.
 
-### Sprint 7: Ürün Sertleştirme
+### Sprint 7: Product Hardening
 
-- API katmanını oluştur
-- Dashboard filtrelerini iyileştir
-- Model versiyonlama ekle
-- Veri ve model sınırlamalarını görünür yap
+- Build the API layer
+- Improve dashboard filters
+- Add model versioning
+- Make data and model limitations visible
 
-Başarı kriteri:
+Success criterion:
 
-- Proje demo edilebilir, tekrarlanabilir ve geliştirilebilir bir MVP seviyesine gelmeli.
+- The project should reach a demo-ready, reproducible, and extensible MVP level.
 
-## 15. İlk Yapılacaklar
+## 15. Initial Tasks
 
-Başlamak için en doğru ilk işler:
+The best first tasks are:
 
-1. `reports/` ve `src/` klasör yapısını oluşturmak
-2. Veri kalite/profiling script'i yazmak
-3. Ham CSV'den örneklem ve tam veri profili çıkarmak
-4. Temizlenmiş tarih, lokasyon ve suç tipi kolonlarını üretmek
-5. Haftalık agregasyon tablosunu oluşturmak
-6. İlk baseline tahminini çalıştırmak
-7. Dashboard wireframe'ini çizmek
+1. Create the `reports/` and `src/` directory structure
+2. Write the data-quality/profiling script
+3. Produce a sample profile and full-data profile from the raw CSV
+4. Produce cleaned date, location, and crime-type columns
+5. Create the weekly aggregation table
+6. Run the first baseline forecast
+7. Draw the dashboard wireframe
 
-İlk teknik milestone:
+Initial technical milestone:
 
 ```text
-Ham NYPD verisinden haftalık precinct/suç tipi bazlı temiz agregasyon tablosu üretmek.
+Produce a clean weekly precinct/crime-type aggregation table from raw NYPD data.
 ```
 
-Bu milestone tamamlanmadan model veya dashboard geliştirmeyi büyütmek doğru değildir.
+Model or dashboard development should not be expanded before this milestone is
+complete.
 
-## 16. Başarı Metrikleri
+## 16. Success Metrics
 
-Ürün başarısı:
+Product success:
 
-- Kullanıcı seçtiği bölge ve tarih aralığında suç trendini hızlıca anlayabiliyor mu?
-- Dashboard artışları ve anomalileri açık şekilde gösterebiliyor mu?
-- Harita, tablo ve grafikler aynı veri tanımından besleniyor mu?
-- Tahmin sonuçları baseline ile kıyaslanabiliyor mu?
+- Can users quickly understand the crime trend for a selected area and date range?
+- Can the dashboard display increases and anomalies clearly?
+- Do the map, tables, and charts use the same data definition?
+- Can forecast results be compared with the baselines?
 
-Model başarısı:
+Model success:
 
-- ML modeli naive baseline'dan daha iyi mi?
-- Hata oranı düşük hacimli bölgelerde kontrol altında mı?
-- En yüksek riskli görünen bölgeler geçmiş backtest'te anlamlı şekilde yakalanıyor mu?
-- Model çıktıları açıklanabilir mi?
+- Does the ML model perform better than a naive baseline?
+- Is the error rate controlled in low-volume areas?
+- Are the areas that appear to have the highest risk captured meaningfully in
+  historical backtests?
+- Are the model outputs explainable?
 
-Veri başarısı:
+Data success:
 
-- Temizleme pipeline'ı tekrarlanabilir mi?
-- Eksik ve hatalı veri oranları raporlanıyor mu?
-- Yeni veri geldiğinde aynı pipeline çalışabiliyor mu?
+- Is the cleaning pipeline reproducible?
+- Are missing- and invalid-data rates reported?
+- Can the same pipeline run when new data arrives?
 
-## 17. Riskler ve Önlemler
+## 17. Risks and Mitigations
 
-### Veri Kalitesi
+### Data Quality
 
-Risk: Tarih, lokasyon ve kategori alanlarında hatalar olabilir.
+Risk: Date, location, and category fields may contain errors.
 
-Önlem: Veri kalite raporu ve temizleme kuralları ilk sprintte zorunlu olmalıdır.
+Mitigation: The data-quality report and cleaning rules must be required in the
+first sprint.
 
-### Etik ve Yanlılık
+### Ethics and Bias
 
-Risk: Demografik alanların yanlış kullanımı ayrımcı sonuçlara yol açabilir.
+Risk: Misuse of demographic fields could produce discriminatory outcomes.
 
-Önlem: İlk modelde demografik alanlar kullanılmamalı, ürün bölge ve zaman agregasyonuna odaklanmalıdır.
+Mitigation: Demographic fields must not be used in the initial model, and the
+product must focus on area and time aggregation.
 
-### Yanlış Güven
+### False Confidence
 
-Risk: Kullanıcı model tahminini kesin gerçek gibi yorumlayabilir.
+Risk: Users may interpret a model forecast as certain fact.
 
-Önlem: Dashboard tahminleri güven aralığı, geçmiş hata ve açıklama ile göstermelidir.
+Mitigation: The dashboard should present forecasts with prediction intervals
+when the model supplies validated intervals. Otherwise it should present
+validated historical error, an explicit interval-unavailable statement, and
+explanatory text.
 
-### Performans
+### Performance
 
-Risk: 10M+ satırlık CSV doğrudan dashboard veya notebook içinde yavaş çalışabilir.
+Risk: A CSV with more than 10 million rows may be slow when used directly in the
+dashboard or a notebook.
 
-Önlem: İşlenmiş Parquet tabloları ve agregasyon katmanı kullanılmalıdır.
+Mitigation: Processed Parquet tables and an aggregation layer should be used.
 
-### Model Karmaşıklığı
+### Model Complexity
 
-Risk: Erken aşamada karmaşık model geliştirmek ürün ilerlemesini yavaşlatır.
+Risk: Developing a complex model too early may slow product progress.
 
-Önlem: Önce baseline, sonra ML modeli yaklaşımı izlenmelidir.
+Mitigation: Follow a baseline-first, ML-model-second approach.
 
-## 18. Nihai Hedef
+## 18. Final Objective
 
-Projenin hedef ürünü:
+The project's target product is:
 
 ```text
 NYC Crime Intelligence Dashboard
 ```
 
-Bu ürün, geçmiş suç verisini temizleyip analiz eden, bölgesel ve zamansal trendleri gösteren, hotspot ve anomali alanlarını işaretleyen, kısa vadeli suç yoğunluğu tahmini yapan ve tüm çıktıları açıklanabilir şekilde sunan bir karar destek dashboard'u olmalıdır.
+This product should be a decision-support dashboard that cleans and analyzes
+historical crime data, displays geographic and temporal trends, flags hotspot and
+anomaly areas, produces short-term crime-volume forecasts, and presents all
+outputs in an explainable manner.

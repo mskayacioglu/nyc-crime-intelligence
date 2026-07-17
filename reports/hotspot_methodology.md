@@ -10,11 +10,11 @@ This Phase 6B layer identifies elevated recent aggregate crime density for preci
 
 ## Inputs and Outputs
 
-- Input clean_events: `/Users/mskayacioglu/Documents/projects/bir-nyc/data/processed/complaints_clean.parquet`
-- Input weekly_area: `/Users/mskayacioglu/Documents/projects/bir-nyc/data/processed/crime_weekly_area.parquet`
-- Output hotspots: `/Users/mskayacioglu/Documents/projects/bir-nyc/data/processed/hotspots.parquet`
-- Output metrics: `/Users/mskayacioglu/Documents/projects/bir-nyc/data/processed/hotspot_metrics.json`
-- Output report: `/Users/mskayacioglu/Documents/projects/bir-nyc/reports/hotspot_methodology.md`
+- Input clean_events: `data/processed/complaints_clean.parquet`
+- Input weekly_area: `data/processed/crime_weekly_area.parquet`
+- Output hotspots: `data/processed/hotspots.parquet`
+- Output metrics: `data/processed/hotspot_metrics.json`
+- Output report: `reports/hotspot_methodology.md`
 
 ## Window Definitions
 
@@ -145,7 +145,13 @@ A row can be flagged only after minimum recent and baseline volume gates are met
 - A 0.01-degree grid is deterministic and easy to reproduce, but it is not an equal-area spatial index.
 - Coordinate centroids summarize complaint locations and should not be interpreted as exact incident addresses.
 
-## Limitations Before Dashboard Use
+## Historical pre-integration limitations
+
+This section records the analytical-layer review before dashboard integration.
+Hotspots are now integrated with aggregate volume, baseline, lift, coordinate,
+window, and responsible-use context; see the
+[current Map report](phase_7b_map_hotspot_view.md) and
+[Governance report](dashboard_governance_view.md).
 
 - Hotspots describe elevated aggregate complaint density; they do not explain causality.
 - Reported complaint counts can be affected by reporting delay, classification changes, policy changes, and data revisions.

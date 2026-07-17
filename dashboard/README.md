@@ -226,18 +226,44 @@ is retained.
 
 ## Refresh dashboard data
 
-From the repository root, use the project Python environment. When the weekly
-aggregate has changed, refresh the established anomaly analysis first, then
-Overview so its shared date/filter context and anomaly publication are current.
-Refresh Map and the staged Forecast Map contract afterward:
+From the repository root, use the project Python environment. There are two
+different refresh scopes; do not use the projection-only sequence after an
+upstream data or model change.
+
+For a full analytical refresh, place the reviewed raw CSV at the documented
+path and rebuild every dependency in order. The explicit as-of date reproduces
+the currently published cleaning horizon:
 
 ```bash
+.venv/bin/python src/data/build_clean_dataset.py --as-of-date 2026-07-04
+.venv/bin/python src/models/build_baseline_forecast.py
+.venv/bin/python src/models/build_ml_forecast.py
+.venv/bin/python src/analytics/build_hotspots.py
 .venv/bin/python src/analytics/build_anomalies.py
 .venv/bin/python src/analytics/build_dashboard_overview.py
 .venv/bin/python src/analytics/build_dashboard_map.py
 .venv/bin/python src/analytics/build_dashboard_forecast_map.py
 .venv/bin/python src/analytics/build_dashboard_precinct_spatial_reference.py
 ```
+
+Advance `--as-of-date` only as part of an intentional source refresh and record
+the new review horizon. See the [root README](../README.md) and
+[complaint-source provenance note](../data/source/nyc_open_data/nypd_complaint_data_historic.md)
+for the raw snapshot checksum and exact-reproduction limitation.
+
+When the cleaned aggregates, forecasts, hotspot/anomaly outputs, and model
+manifests are already current and only the browser projections need to be
+restaged, run only the dashboard builders:
+
+```bash
+.venv/bin/python src/analytics/build_dashboard_overview.py
+.venv/bin/python src/analytics/build_dashboard_map.py
+.venv/bin/python src/analytics/build_dashboard_forecast_map.py
+.venv/bin/python src/analytics/build_dashboard_precinct_spatial_reference.py
+```
+
+If only anomaly analysis was intentionally regenerated, rebuild Overview after
+`build_anomalies.py` so the published anomaly family and shared context agree.
 
 The Forecast Map build writes byte-identical copies:
 
@@ -336,10 +362,13 @@ incompatible methodology/identity from malformed input.
 
 ## Run locally
 
+Use npm with a Node.js version accepted by the locked Vite toolchain:
+`^20.19.0 || ^22.12.0 || >=24.0.0`. A clean checkout should use the lockfile:
+
 ```bash
 cd dashboard
-npm install
-npm run dev
+npm ci
+npm run dev -- --port 4173 --strictPort
 ```
 
 Open the URL printed by Vite. Overview is the default application view. Use
@@ -358,6 +387,11 @@ The verified development server for this redesign is
 <http://127.0.0.1:4173/>.
 
 ## Verify
+
+The current repository baseline is 212 Vitest tests across 15 files and 99
+discovered Python contract tests. The named subsections below retain the exact
+counts, bundle sizes, and practical results recorded at each milestone; older
+totals are historical snapshots, not competing current baselines.
 
 From the repository root:
 
