@@ -16,8 +16,8 @@ Example full run from the repository root:
 Example smoke run that does not touch the default generated outputs:
 
     python src/data/build_clean_dataset.py --sample-rows 10000 \
-      --processed-dir /tmp/bir-nyc-smoke/processed \
-      --reports-dir /tmp/bir-nyc-smoke/reports
+      --processed-dir .cache/bir-nyc-smoke/processed \
+      --reports-dir .cache/bir-nyc-smoke/reports
 """
 
 from __future__ import annotations

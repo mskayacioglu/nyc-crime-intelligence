@@ -143,60 +143,92 @@ class MLForecastContractTest(unittest.TestCase):
         self.assertTrue(rows_by_week[date(2024, 2, 5)][6])
 
     def test_model_manifest_records_ml_contract(self) -> None:
-        payload = {
-            "generated_at_utc": "2026-07-05T00:00:00+00:00",
-            "phase": "Phase 5 - ML Forecast Model",
-            "inputs": {
-                "weekly_area": "data/processed/crime_weekly_area.parquet",
-                "baseline_manifest": "models/baseline_forecast/model_manifest.json",
-            },
-            "outputs": {
-                "model_manifest": "models/weekly_forecast/model_manifest.json",
-                "predictions": "data/processed/ml_predictions.parquet",
-                "metrics": "data/processed/ml_metrics.json",
-                "report": "reports/ml_model_report.md",
-            },
-            "forecast_columns_used": build_ml_forecast.FORECAST_COLUMNS_USED,
-            "engineered_feature_columns": build_ml_forecast.ENGINEERED_FEATURE_COLUMNS,
-            "model_feature_columns": build_ml_forecast.MODEL_FEATURE_COLUMNS,
-            "model_config": {
-                "model_name": build_ml_forecast.MODEL_NAME,
-                "model_version": build_ml_forecast.MODEL_VERSION,
-                "dependency_mode": "stdlib_plus_duckdb_no_sklearn",
-                "target": "next-week crime_count by week_start, borough, precinct, offense_type, law_category",
-                "selection_objective": build_ml_forecast.SELECTION_OBJECTIVE,
-                "selected_parameters": {
-                    "alpha": 0.25,
-                    "beta": 0.1,
-                    "gamma": 0.05,
-                    "shrinkage": 1.0,
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_root = Path(tmpdir)
+            payload = {
+                "generated_at_utc": "2026-07-05T00:00:00+00:00",
+                "phase": "Phase 5 - ML Forecast Model",
+                "inputs": {
+                    "weekly_area": project_root
+                    / "data/processed/crime_weekly_area.parquet",
+                    "baseline_manifest": project_root
+                    / "models/baseline_forecast/model_manifest.json",
                 },
-                "prediction_formula": "max(0, ...)",
-                "zero_fill_rule": "Missing weekly rows are treated as zero.",
-                "validation_window": {
-                    "validation_start_week": date(2024, 1, 1),
-                    "validation_end_week": date(2024, 12, 23),
+                "outputs": {
+                    "model_manifest": project_root
+                    / "models/weekly_forecast/model_manifest.json",
+                    "predictions": project_root / "data/processed/ml_predictions.parquet",
+                    "metrics": project_root / "data/processed/ml_metrics.json",
+                    "report": project_root / "reports/ml_model_report.md",
                 },
-            },
-            "analysis_window": {
-                "min_week_start": date(2005, 12, 26),
-                "max_week_start": date(2025, 12, 29),
-                "segment_count": 8466,
-                "backtest_start_week": date(2024, 12, 30),
-                "backtest_end_week": date(2025, 12, 22),
-                "next_week_forecast_week": date(2026, 1, 5),
-            },
-            "record_counts": {"backtest_rows": 437144},
-            "metrics": {"overall": []},
-            "baseline_comparison": {"beats_baseline_all_core_metrics": True},
-            "ethics": {
-                "sensitive_columns_excluded": build_ml_forecast.SENSITIVE_COLUMNS,
-            },
-        }
+                "forecast_columns_used": build_ml_forecast.FORECAST_COLUMNS_USED,
+                "engineered_feature_columns": build_ml_forecast.ENGINEERED_FEATURE_COLUMNS,
+                "model_feature_columns": build_ml_forecast.MODEL_FEATURE_COLUMNS,
+                "model_config": {
+                    "model_name": build_ml_forecast.MODEL_NAME,
+                    "model_version": build_ml_forecast.MODEL_VERSION,
+                    "dependency_mode": "stdlib_plus_duckdb_no_sklearn",
+                    "target": "next-week crime_count by week_start, borough, precinct, offense_type, law_category",
+                    "selection_objective": build_ml_forecast.SELECTION_OBJECTIVE,
+                    "selected_parameters": {
+                        "alpha": 0.25,
+                        "beta": 0.1,
+                        "gamma": 0.05,
+                        "shrinkage": 1.0,
+                    },
+                    "prediction_formula": "max(0, ...)",
+                    "zero_fill_rule": "Missing weekly rows are treated as zero.",
+                    "validation_window": {
+                        "validation_start_week": date(2024, 1, 1),
+                        "validation_end_week": date(2024, 12, 23),
+                    },
+                },
+                "analysis_window": {
+                    "min_week_start": date(2005, 12, 26),
+                    "max_week_start": date(2025, 12, 29),
+                    "segment_count": 8466,
+                    "backtest_start_week": date(2024, 12, 30),
+                    "backtest_end_week": date(2025, 12, 22),
+                    "next_week_forecast_week": date(2026, 1, 5),
+                },
+                "record_counts": {"backtest_rows": 437144},
+                "metrics": {"overall": []},
+                "baseline_comparison": {"beats_baseline_all_core_metrics": True},
+                "ethics": {
+                    "sensitive_columns_excluded": build_ml_forecast.SENSITIVE_COLUMNS,
+                },
+            }
 
-        manifest = build_ml_forecast.build_model_manifest(payload)
+            manifest = build_ml_forecast.build_model_manifest(
+                payload, project_root=project_root
+            )
+
+            payload["inputs"]["weekly_area"] = project_root.parent / "outside.parquet"
+            with self.assertRaisesRegex(ValueError, "inside the project root"):
+                build_ml_forecast.build_model_manifest(
+                    payload, project_root=project_root
+                )
 
         self.assertEqual(manifest["artifact_type"], "weekly_forecast_ml_model")
+        self.assertEqual(
+            {
+                key: manifest[key]
+                for key in (
+                    "training_input",
+                    "baseline_manifest_input",
+                    "prediction_output",
+                    "metrics_output",
+                    "report_output",
+                )
+            },
+            {
+                "training_input": "data/processed/crime_weekly_area.parquet",
+                "baseline_manifest_input": "models/baseline_forecast/model_manifest.json",
+                "prediction_output": "data/processed/ml_predictions.parquet",
+                "metrics_output": "data/processed/ml_metrics.json",
+                "report_output": "reports/ml_model_report.md",
+            },
+        )
         self.assertEqual(manifest["model"]["model_name"], build_ml_forecast.MODEL_NAME)
         self.assertFalse(manifest["leakage_controls"]["random_splits_used"])
         overlap = set(manifest["feature_policy"]["engineered_feature_columns"]).intersection(

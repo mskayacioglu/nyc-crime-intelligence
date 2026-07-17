@@ -164,42 +164,74 @@ class BaselineForecastContractTest(unittest.TestCase):
         self.assertEqual(previous_year["prediction_count"], 0)
 
     def test_model_manifest_records_baseline_contract(self) -> None:
-        payload = {
-            "generated_at_utc": "2026-07-05T00:00:00+00:00",
-            "phase": "Phase 4 - Baseline Forecast Model",
-            "inputs": {"weekly_area": "data/processed/crime_weekly_area.parquet"},
-            "outputs": {
-                "model_manifest": "models/baseline_forecast/model_manifest.json",
-                "predictions": "data/processed/baseline_predictions.parquet",
-                "metrics": "data/processed/baseline_metrics.json",
-                "report": "reports/baseline_model_report.md",
-            },
-            "forecast_columns_used": build_baseline_forecast.FORECAST_COLUMNS_USED,
-            "forecast_config": {
-                "target": "next-week crime_count by week_start, borough, precinct, offense_type, law_category",
-                "include_latest_week_in_backtest": False,
-                "zero_fill_rule": "Missing weekly rows are treated as zero.",
-                "baseline_model_rules": build_baseline_forecast.BASELINE_MODEL_RULES,
-            },
-            "analysis_window": {
-                "min_week_start": date(2024, 1, 1),
-                "max_week_start": date(2024, 12, 30),
-                "segment_count": 10,
-                "backtest_start_week": date(2024, 1, 8),
-                "backtest_end_week": date(2024, 12, 23),
-                "next_week_forecast_week": date(2025, 1, 6),
-            },
-            "record_counts": {"backtest_rows": 100},
-            "metrics": {"overall": []},
-            "best_baseline": {"baseline_method": "trailing_8_week_mean"},
-            "ethics": {
-                "sensitive_columns_excluded": build_baseline_forecast.SENSITIVE_COLUMNS,
-            },
-        }
+        with tempfile.TemporaryDirectory() as tmpdir:
+            project_root = Path(tmpdir)
+            payload = {
+                "generated_at_utc": "2026-07-05T00:00:00+00:00",
+                "phase": "Phase 4 - Baseline Forecast Model",
+                "inputs": {
+                    "weekly_area": project_root
+                    / "data/processed/crime_weekly_area.parquet"
+                },
+                "outputs": {
+                    "model_manifest": project_root
+                    / "models/baseline_forecast/model_manifest.json",
+                    "predictions": project_root
+                    / "data/processed/baseline_predictions.parquet",
+                    "metrics": project_root / "data/processed/baseline_metrics.json",
+                    "report": project_root / "reports/baseline_model_report.md",
+                },
+                "forecast_columns_used": build_baseline_forecast.FORECAST_COLUMNS_USED,
+                "forecast_config": {
+                    "target": "next-week crime_count by week_start, borough, precinct, offense_type, law_category",
+                    "include_latest_week_in_backtest": False,
+                    "zero_fill_rule": "Missing weekly rows are treated as zero.",
+                    "baseline_model_rules": build_baseline_forecast.BASELINE_MODEL_RULES,
+                },
+                "analysis_window": {
+                    "min_week_start": date(2024, 1, 1),
+                    "max_week_start": date(2024, 12, 30),
+                    "segment_count": 10,
+                    "backtest_start_week": date(2024, 1, 8),
+                    "backtest_end_week": date(2024, 12, 23),
+                    "next_week_forecast_week": date(2025, 1, 6),
+                },
+                "record_counts": {"backtest_rows": 100},
+                "metrics": {"overall": []},
+                "best_baseline": {"baseline_method": "trailing_8_week_mean"},
+                "ethics": {
+                    "sensitive_columns_excluded": build_baseline_forecast.SENSITIVE_COLUMNS,
+                },
+            }
 
-        manifest = build_baseline_forecast.build_model_manifest(payload)
+            manifest = build_baseline_forecast.build_model_manifest(
+                payload, project_root=project_root
+            )
+
+            payload["inputs"]["weekly_area"] = project_root.parent / "outside.parquet"
+            with self.assertRaisesRegex(ValueError, "inside the project root"):
+                build_baseline_forecast.build_model_manifest(
+                    payload, project_root=project_root
+                )
 
         self.assertEqual(manifest["artifact_type"], "baseline_forecast_model")
+        self.assertEqual(
+            {
+                key: manifest[key]
+                for key in (
+                    "training_input",
+                    "prediction_output",
+                    "metrics_output",
+                    "report_output",
+                )
+            },
+            {
+                "training_input": "data/processed/crime_weekly_area.parquet",
+                "prediction_output": "data/processed/baseline_predictions.parquet",
+                "metrics_output": "data/processed/baseline_metrics.json",
+                "report_output": "reports/baseline_model_report.md",
+            },
+        )
         self.assertEqual(manifest["selected_baseline"]["baseline_method"], "trailing_8_week_mean")
         self.assertEqual(
             {rule["baseline_method"] for rule in manifest["baseline_model_rules"]},

@@ -17,43 +17,47 @@ Generated at UTC: `2026-07-04T02:30:05.162635+00:00`
 
 ## Column Profile
 
-| column_name       |   missing_pct |   approx_unique_count | min_lexical_value                             | max_lexical_value              |
-|:------------------|--------------:|----------------------:|:----------------------------------------------|:-------------------------------|
-| HADEVELOPT        |  99.6497      |                    35 | AMSTERDAM                                     | WOODSIDE                       |
-| PARKS_NM          |  99.5613      |                  1371 | "UNCLE" VITO E. MARANZANO GLENDALE PLAYGROUND | ZION TRIANGLE                  |
-| STATION_NAME      |  97.4201      |                   458 | 1 AVENUE                                      | ZEREGA AVENUE                  |
-| TRANSIT_DISTRICT  |  97.4201      |                    13 | 1                                             | 4                              |
-| HOUSING_PSA       |  92.6347      |                  4498 | 10                                            | 9993                           |
-| SUSP_AGE_GROUP    |  46.7461      |                   350 | -1                                            | UNKNOWN                        |
-| SUSP_SEX          |  39.169       |                     3 | F                                             | U                              |
-| SUSP_RACE         |  37.8448      |                     9 | AMERICAN INDIAN/ALASKAN NATIVE                | WHITE HISPANIC                 |
-| LOC_OF_OCCUR_DESC |  20.6552      |                     5 | FRONT OF                                      | REAR OF                        |
-| CMPLNT_TO_DT      |  18.615       |                 10842 | 01/01/1967                                    | 12/31/2025                     |
-| CMPLNT_TO_TM      |  18.5524      |                  1082 | 00:00:00                                      | 23:59:00                       |
-| VIC_AGE_GROUP     |  16.1204      |                   335 | -1                                            | UNKNOWN                        |
-| PREM_TYP_DESC     |   0.539314    |                   103 | ABANDONED BUILDING                            | VIDEO STORE                    |
-| OFNS_DESC         |   0.187728    |                    85 | ABORTION                                      | VEHICLE AND TRAFFIC LAWS       |
-| BORO_NM           |   0.100064    |                     5 | BRONX                                         | STATEN ISLAND                  |
-| PD_CD             |   0.0822518   |                   555 | 100                                           | 975                            |
-| PD_DESC           |   0.0822518   |                   430 | A.B.C.,FALSE PROOF OF AGE                     | WEAPONS,PROHIBITED USE IMITATI |
-| VIC_RACE          |   0.00937298  |                     9 | AMERICAN INDIAN/ALASKAN NATIVE                | WHITE HISPANIC                 |
-| ADDR_PCT_CD       |   0.00765526  |                    79 | 1                                             | 94                             |
-| CMPLNT_FR_DT      |   0.0065035   |                 11920 | 01/01/1948                                    | 12/31/2025                     |
-| PATROL_BORO       |   0.00585811  |                     9 | PATROL BORO BKLYN NORTH                       | PATROL BORO STATEN ISLAND      |
-| Lat_Lon           |   0.00475599  |                193538 | (0.0, 0.0)                                    | (40.91295931, -73.90245844)    |
-| Longitude         |   0.00475599  |                163716 | -73.700286                                    | 0                              |
-| Latitude          |   0.00475599  |                158693 | 0                                             | 40.91295931                    |
-| Y_COORD_CD        |   0.00471628  |                 70018 | 0                                             | 271909                         |
-| X_COORD_CD        |   0.00471628  |                 68763 | -74                                           | 999999                         |
-| VIC_SEX           |   0.00305813  |                     6 | D                                             | U                              |
-| CRM_ATPT_CPTD_CD  |   0.00166807  |                     2 | ATTEMPTED                                     | COMPLETED                      |
-| CMPLNT_FR_TM      |   0.000476592 |                  1082 | 00:00:00                                      | 23:59:00                       |
-| CMPLNT_NUM        |   0           |              12095559 | 10006319                                      | 9967306                        |
-| RPT_DT            |   0           |                  8877 | 01/01/2006                                    | 12/31/2025                     |
-| KY_CD             |   0           |                    79 | 101                                           | 881                            |
-| JURIS_DESC        |   0           |                    29 | AMTRACK                                       | U.S. PARK POLICE               |
-| JURISDICTION_CODE |   0           |                    25 | 0                                             | 97                             |
-| LAW_CAT_CD        |   0           |                     3 | FELONY                                        | VIOLATION                      |
+Lexical minima and maxima are intentionally omitted because they can reproduce
+event-level identifiers, exact coordinates, or location examples. The aggregate
+missingness and cardinality measures are retained.
+
+| column_name       |   missing_pct |   approx_unique_count |
+|:------------------|--------------:|----------------------:|
+| HADEVELOPT        |  99.6497      |                    35 |
+| PARKS_NM          |  99.5613      |                  1371 |
+| STATION_NAME      |  97.4201      |                   458 |
+| TRANSIT_DISTRICT  |  97.4201      |                    13 |
+| HOUSING_PSA       |  92.6347      |                  4498 |
+| SUSP_AGE_GROUP    |  46.7461      |                   350 |
+| SUSP_SEX          |  39.169       |                     3 |
+| SUSP_RACE         |  37.8448      |                     9 |
+| LOC_OF_OCCUR_DESC |  20.6552      |                     5 |
+| CMPLNT_TO_DT      |  18.615       |                 10842 |
+| CMPLNT_TO_TM      |  18.5524      |                  1082 |
+| VIC_AGE_GROUP     |  16.1204      |                   335 |
+| PREM_TYP_DESC     |   0.539314    |                   103 |
+| OFNS_DESC         |   0.187728    |                    85 |
+| BORO_NM           |   0.100064    |                     5 |
+| PD_CD             |   0.0822518   |                   555 |
+| PD_DESC           |   0.0822518   |                   430 |
+| VIC_RACE          |   0.00937298  |                     9 |
+| ADDR_PCT_CD       |   0.00765526  |                    79 |
+| CMPLNT_FR_DT      |   0.0065035   |                 11920 |
+| PATROL_BORO       |   0.00585811  |                     9 |
+| Lat_Lon           |   0.00475599  |                193538 |
+| Longitude         |   0.00475599  |                163716 |
+| Latitude          |   0.00475599  |                158693 |
+| Y_COORD_CD        |   0.00471628  |                 70018 |
+| X_COORD_CD        |   0.00471628  |                 68763 |
+| VIC_SEX           |   0.00305813  |                     6 |
+| CRM_ATPT_CPTD_CD  |   0.00166807  |                     2 |
+| CMPLNT_FR_TM      |   0.000476592 |                  1082 |
+| CMPLNT_NUM        |   0           |              12095559 |
+| RPT_DT            |   0           |                  8877 |
+| KY_CD             |   0           |                    79 |
+| JURIS_DESC        |   0           |                    29 |
+| JURISDICTION_CODE |   0           |                    25 |
+| LAW_CAT_CD        |   0           |                     3 |
 
 
 ## Data Quality Rule Counts
@@ -98,9 +102,12 @@ be reconciled by subtraction or summation.
 
 ## Geographic Quality
 
-|   row_count |   missing_lat_or_lon |   zero_lat_or_lon |   valid_nyc_coordinates |   coordinates_outside_nyc_bounds |   min_latitude |   max_latitude |   min_longitude |   max_longitude |   missing_projected_coordinates |
-|------------:|---------------------:|------------------:|------------------------:|---------------------------------:|---------------:|---------------:|----------------:|----------------:|--------------------------------:|
-| 1.00715e+07 |                  479 |                25 |              1.0071e+07 |                               33 |              0 |         40.913 |         -74.255 |               0 |                             475 |
+Coordinate extrema are intentionally omitted because they can reproduce
+event-derived locations. Aggregate quality counts are retained.
+
+|   row_count |   missing_lat_or_lon |   zero_lat_or_lon |   valid_nyc_coordinates |   coordinates_outside_nyc_bounds |   missing_projected_coordinates |
+|------------:|---------------------:|------------------:|------------------------:|---------------------------------:|--------------------------------:|
+| 1.00715e+07 |                  479 |                25 |              1.0071e+07 |                               33 |                             475 |
 
 
 ## Missingness by Business Column Group

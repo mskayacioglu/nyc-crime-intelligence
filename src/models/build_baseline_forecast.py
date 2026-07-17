@@ -243,6 +243,21 @@ def resolve_path(project_root: Path, value: Path | None, default_relative: Path)
     return (project_root / value).resolve()
 
 
+def repository_relative_path(project_root: Path, value: str | Path) -> str:
+    """Return a deterministic POSIX path rooted within the repository."""
+    root = project_root.resolve()
+    candidate = Path(value)
+    if not candidate.is_absolute():
+        candidate = root / candidate
+    try:
+        relative = candidate.resolve().relative_to(root)
+    except ValueError as exc:
+        raise ValueError(
+            "Model manifest paths must be inside the project root."
+        ) from exc
+    return relative.as_posix()
+
+
 def sql_string(value: str | Path) -> str:
     return "'" + str(value).replace("'", "''") + "'"
 
@@ -1014,7 +1029,9 @@ def write_metrics_json(path: Path, payload: dict[str, Any]) -> None:
         file.write("\n")
 
 
-def build_model_manifest(payload: dict[str, Any]) -> dict[str, Any]:
+def build_model_manifest(
+    payload: dict[str, Any], *, project_root: Path
+) -> dict[str, Any]:
     """Build a small model artifact for deterministic baseline formulas."""
     return {
         "artifact_type": "baseline_forecast_model",
@@ -1022,10 +1039,18 @@ def build_model_manifest(payload: dict[str, Any]) -> dict[str, Any]:
         "generated_at_utc": payload["generated_at_utc"],
         "phase": payload["phase"],
         "source_script": "src/models/build_baseline_forecast.py",
-        "training_input": payload["inputs"]["weekly_area"],
-        "prediction_output": payload["outputs"]["predictions"],
-        "metrics_output": payload["outputs"]["metrics"],
-        "report_output": payload["outputs"]["report"],
+        "training_input": repository_relative_path(
+            project_root, payload["inputs"]["weekly_area"]
+        ),
+        "prediction_output": repository_relative_path(
+            project_root, payload["outputs"]["predictions"]
+        ),
+        "metrics_output": repository_relative_path(
+            project_root, payload["outputs"]["metrics"]
+        ),
+        "report_output": repository_relative_path(
+            project_root, payload["outputs"]["report"]
+        ),
         "target": payload["forecast_config"]["target"],
         "segment_keys": [
             "borough",
@@ -1064,9 +1089,11 @@ def build_model_manifest(payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def write_model_manifest(path: Path, payload: dict[str, Any]) -> None:
+def write_model_manifest(
+    path: Path, payload: dict[str, Any], *, project_root: Path
+) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
-    manifest = build_model_manifest(payload)
+    manifest = build_model_manifest(payload, project_root=project_root)
     with path.open("w", encoding="utf-8") as file:
         json.dump(manifest, file, indent=2, default=json_default)
         file.write("\n")
@@ -1371,7 +1398,7 @@ def main() -> None:
     print(f"Writing baseline metrics JSON: {metrics_path}")
     write_metrics_json(metrics_path, payload)
     print(f"Writing baseline model manifest: {model_manifest_path}")
-    write_model_manifest(model_manifest_path, payload)
+    write_model_manifest(model_manifest_path, payload, project_root=project_root)
     print(f"Writing baseline model report: {report_path}")
     write_baseline_report(report_path, payload)
     print("Phase 4 baseline forecast model complete.")
