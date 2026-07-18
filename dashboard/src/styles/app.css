@@ -2457,7 +2457,7 @@ a:focus-visible,
   }
 
   .freshness-status > svg,
-  .freshness-full,
+  .freshness-status .freshness-full,
   .identity-mark {
     display: none;
   }
@@ -2465,14 +2465,17 @@ a:focus-visible,
   .freshness-status .freshness-mobile {
     display: block !important;
     max-width: 104px;
-    overflow: hidden;
-    text-overflow: ellipsis;
-    white-space: nowrap;
+    overflow: visible;
+    text-overflow: clip;
+    white-space: normal;
   }
 
   .identity-block h1 {
     max-width: 142px;
+    overflow: visible;
     font-size: 0.78rem;
+    text-overflow: clip;
+    white-space: normal;
   }
 
   .filter-toolbar__heading {

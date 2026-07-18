@@ -48,7 +48,7 @@ describe('Map responsive layout contract', () => {
     expect(mobile).toMatch(/\.hotspot-map\s*{[^}]*min-height:\s*390px;/s)
   })
 
-  it('uses a single metric column at the verified narrow mobile width', () => {
+  it('uses a single metric column and wraps the compact header at the verified narrow mobile width', () => {
     const narrowMobile = mediaBlock(
       '@media (max-width: 390px)',
       '@media (prefers-reduced-motion: reduce)',
@@ -61,7 +61,13 @@ describe('Map responsive layout contract', () => {
       /\.freshness-status\s*{[^}]*display:\s*flex;/s,
     )
     expect(narrowMobile).toMatch(
-      /\.freshness-status \.freshness-mobile\s*{[^}]*display:\s*block\s*!important;/s,
+      /\.freshness-status \.freshness-full\s*,[^}]*display:\s*none;/s,
+    )
+    expect(narrowMobile).toMatch(
+      /\.freshness-status \.freshness-mobile\s*{[^}]*display:\s*block\s*!important;[^}]*overflow:\s*visible;[^}]*text-overflow:\s*clip;[^}]*white-space:\s*normal;/s,
+    )
+    expect(narrowMobile).toMatch(
+      /\.identity-block h1\s*{[^}]*overflow:\s*visible;[^}]*text-overflow:\s*clip;[^}]*white-space:\s*normal;/s,
     )
   })
 
