@@ -23,9 +23,8 @@ The initial repository audit found the requested state exactly:
 - no listener on port 4173; and
 - no applicable repository `AGENTS.md` outside dependency-owned content.
 
-No initial-state discrepancy was present. Existing work and the then-open
-Phase 7C.3 practical browser check were preserved; that later milestone is now
-complete with genuine Chrome native-keyboard evidence.
+No initial-state discrepancy was present. Existing work and the separate Phase
+7C.3 verification-incomplete browser blocker were preserved.
 
 ## Authoritative data chain
 
@@ -244,14 +243,13 @@ No custom keydown, roving-tabindex, or synthetic activation handler was added.
 Native button Enter and Space behavior, focus retention, filter fallback, and
 list/detail/accessibility synchronization pass in automated browser-DOM tests.
 
-An earlier in-app browser channel focused the exact native result and displayed
-the visible focus ring, but did not deliver genuine Tab/Enter/Space activation
-events to the application. Script-dispatched events, JavaScript
-`focus()`/`click()`, and direct state mutation were not used as substitutes.
-This remains historical browser-channel evidence with automated native-control
-regression coverage. Phase 7C.3 later completed genuine Chrome Enter/Tab/Space
-acceptance on the predictive native-button path; no separate Anomalies manual
-gate remains in the local completion criteria.
+The permitted in-app browser focused the exact native result and displayed the
+visible focus ring, but it again did not deliver genuine Tab/Enter/Space
+activation events to the application. Another browser surface, script-dispatched
+events, JavaScript `focus()`/`click()`, or direct state mutation was not used as
+a substitute. This is recorded as a browser-channel limitation, with automated
+native-control regression coverage; it does not modify or close the separate
+Phase 7C.3 keyboard blocker.
 
 ## Explicit state behavior
 
@@ -376,10 +374,9 @@ practical verification.
   against a person or community.
 - Aggregate area labels can be literal `UNKNOWN` in the source and are displayed
   as `Unknown / not reported` rather than inferred.
-- The earlier in-app browser channel did not deliver Tab/Enter/Space for this
-  view. Native semantics and automated coverage are retained without
-  application-specific compensation; the completed Phase 7C.3 Chrome acceptance
-  separately verifies genuine native input on the predictive list.
+- The in-app browser's genuine Tab/Enter/Space delivery remains unavailable for
+  practical activation verification. Native semantics and automated coverage
+  are retained without application-specific compensation.
 
 Only aggregate-safe area/time/category signals are included. Complaint IDs,
 records, names, exact addresses, event-level coordinates, person attributes,

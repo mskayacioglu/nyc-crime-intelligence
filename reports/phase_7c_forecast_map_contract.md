@@ -374,5 +374,7 @@ official precinct spatial reference keyed by
 `nypd-precinct:<source precinct label>` and synchronized polygon rendering. The
 completed UI continues to present point estimates and overall historical error
 context without inventing intervals, danger scores, incident locations, or
-patrol/enforcement guidance. Its genuine Chrome native-keyboard acceptance is
-recorded in the [Phase 7C.3 report](phase_7c3_precinct_spatial_rendering.md).
+patrol/enforcement guidance. Its remaining practical native-keyboard verification
+blocker is recorded in the
+[Phase 7C.3 report](phase_7c3_precinct_spatial_rendering.md); this contract does
+not close or weaken it.

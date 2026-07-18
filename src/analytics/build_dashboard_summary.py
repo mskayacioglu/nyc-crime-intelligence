@@ -206,6 +206,31 @@ def resolve_path(project_root: Path, value: Path | None, default_relative: Path)
     return (project_root / value).resolve()
 
 
+def repository_relative_path(project_root: Path, value: str | Path) -> str:
+    """Return a deterministic POSIX path rooted within the repository."""
+    root = project_root.resolve()
+    candidate = Path(value)
+    if not candidate.is_absolute():
+        candidate = root / candidate
+    try:
+        relative = candidate.resolve().relative_to(root)
+    except ValueError as exc:
+        raise ValueError(
+            "Dashboard summary paths must be inside the project root."
+        ) from exc
+    return relative.as_posix()
+
+
+def repository_relative_paths(
+    project_root: Path, values: dict[str, Path]
+) -> dict[str, str]:
+    """Normalize a named path collection for portable summaries and reports."""
+    return {
+        name: repository_relative_path(project_root, path)
+        for name, path in values.items()
+    }
+
+
 def sql_string(value: str | Path) -> str:
     return "'" + str(value).replace("'", "''") + "'"
 
@@ -1092,6 +1117,7 @@ def build_map_ready(con: Any, grid_size: float, heatmap_limit: int) -> dict[str,
 def build_dashboard_summary(
     con: Any,
     *,
+    project_root: Path,
     inputs: dict[str, Path],
     top_n: int,
     growth_window_months: int,
@@ -1099,11 +1125,12 @@ def build_dashboard_summary(
     heatmap_grid_size: float,
     heatmap_limit: int,
 ) -> dict[str, Any]:
+    portable_inputs = repository_relative_paths(project_root, inputs)
     record_counts = build_record_counts(con)
     payload = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "phase": "Phase 3 - Analytical Baseline",
-        "inputs": {name: str(path) for name, path in inputs.items()},
+        "inputs": portable_inputs,
         "analytics_columns_used": ANALYTICS_COLUMNS_USED,
         "analysis_window": build_analysis_window(con),
         "record_counts": record_counts,
@@ -1444,6 +1471,16 @@ def main() -> None:
         "weekly_area": processed_dir / WEEKLY_FILE,
         "monthly_area": processed_dir / MONTHLY_FILE,
     }
+    repository_relative_paths(
+        project_root,
+        {
+            **inputs,
+            "processed_dir": processed_dir,
+            "reports_dir": reports_dir,
+            "dashboard_summary": dashboard_summary_path,
+            "exploratory_report": exploratory_report_path,
+        },
+    )
     missing_inputs = [path for path in inputs.values() if not path.exists()]
     if missing_inputs:
         raise FileNotFoundError(f"Missing processed input files: {missing_inputs}")
@@ -1467,6 +1504,7 @@ def main() -> None:
     print("Building dashboard summary payload.")
     payload = build_dashboard_summary(
         con,
+        project_root=project_root,
         inputs=inputs,
         top_n=args.top_n,
         growth_window_months=args.growth_window_months,

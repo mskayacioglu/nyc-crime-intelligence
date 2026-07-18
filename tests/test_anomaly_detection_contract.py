@@ -1,8 +1,10 @@
 import importlib.util
+import sys
 import tempfile
 import unittest
 from datetime import date, timedelta
 from pathlib import Path
+from unittest.mock import patch
 
 
 MODULE_PATH = (
@@ -12,9 +14,139 @@ SPEC = importlib.util.spec_from_file_location("build_anomalies", MODULE_PATH)
 build_anomalies = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 SPEC.loader.exec_module(build_anomalies)
+PROJECT_ROOT = MODULE_PATH.parents[2]
 
 
 class AnomalyDetectionContractTest(unittest.TestCase):
+    def test_metrics_and_nested_ml_status_paths_are_portable(self) -> None:
+        inputs = {
+            "weekly_area": PROJECT_ROOT / "data/processed/crime_weekly_area.parquet",
+            "ml_predictions": PROJECT_ROOT / "data/processed/ml_predictions.parquet",
+            "ml_model_manifest": PROJECT_ROOT
+            / "models/weekly_forecast/model_manifest.json",
+        }
+        outputs = {
+            "anomalies": PROJECT_ROOT / "data/processed/anomalies.parquet",
+            "metrics": PROJECT_ROOT / "data/processed/anomaly_metrics.json",
+            "report": PROJECT_ROOT / "reports/anomaly_methodology.md",
+        }
+        ml_status = {
+            "status": "used",
+            "predictions_path": inputs["ml_predictions"],
+            "model_manifest_path": inputs["ml_model_manifest"],
+            "manifest_available": True,
+        }
+        severity_counts = [
+            {"anomaly_severity": label}
+            for label in build_anomalies.SEVERITY_LABELS
+        ]
+
+        with (
+            patch.object(build_anomalies, "build_analysis_window", return_value={}),
+            patch.object(build_anomalies, "build_record_counts", return_value={}),
+            patch.object(
+                build_anomalies,
+                "build_severity_counts",
+                return_value=severity_counts,
+            ),
+            patch.object(
+                build_anomalies, "build_top_recent_anomalies", return_value=[]
+            ),
+            patch.object(
+                build_anomalies, "build_top_overall_anomalies", return_value=[]
+            ),
+            patch.object(
+                build_anomalies,
+                "build_volatile_borough_offense_groups",
+                return_value=[],
+            ),
+        ):
+            payload = build_anomalies.build_metrics_payload(
+                None,
+                project_root=PROJECT_ROOT,
+                inputs=inputs,
+                outputs=outputs,
+                input_summary={},
+                ml_summary={},
+                config=build_anomalies.AnomalyConfig(),
+                ml_status=ml_status,
+                scoring_end_week=date(2024, 1, 29),
+                latest_week_excluded_from_scoring=True,
+                top_n=1,
+            )
+
+        self.assertEqual(
+            payload["inputs"],
+            {
+                "weekly_area": "data/processed/crime_weekly_area.parquet",
+                "ml_predictions": "data/processed/ml_predictions.parquet",
+                "ml_model_manifest": "models/weekly_forecast/model_manifest.json",
+            },
+        )
+        self.assertEqual(
+            payload["outputs"],
+            {
+                "anomalies": "data/processed/anomalies.parquet",
+                "metrics": "data/processed/anomaly_metrics.json",
+                "report": "reports/anomaly_methodology.md",
+            },
+        )
+        self.assertEqual(
+            payload["leakage_controls"]["ml_prediction_status"],
+            {
+                "status": "used",
+                "predictions_path": "data/processed/ml_predictions.parquet",
+                "model_manifest_path": "models/weekly_forecast/model_manifest.json",
+                "manifest_available": True,
+            },
+        )
+        self.assertNotIn(str(PROJECT_ROOT), repr(payload["inputs"]))
+        self.assertNotIn(
+            str(PROJECT_ROOT),
+            repr(payload["leakage_controls"]["ml_prediction_status"]),
+        )
+
+    def test_external_metrics_and_ml_status_paths_fail_closed(self) -> None:
+        outside_path = PROJECT_ROOT.parent / "outside-anomaly-input.parquet"
+
+        with self.assertRaisesRegex(ValueError, "inside the project root"):
+            build_anomalies.repository_relative_path(PROJECT_ROOT, outside_path)
+        with self.assertRaisesRegex(ValueError, "inside the project root"):
+            build_anomalies.repository_relative_ml_status(
+                PROJECT_ROOT,
+                {
+                    "status": "used",
+                    "predictions_path": outside_path,
+                    "model_manifest_path": None,
+                },
+            )
+
+    def test_main_rejects_external_outputs_before_opening_duckdb(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            directory = Path(tmpdir)
+            project_root = directory / "repository"
+            project_root.mkdir()
+            outside_path = directory / "anomalies.parquet"
+
+            with (
+                patch.object(
+                    sys,
+                    "argv",
+                    [
+                        "build_anomalies.py",
+                        "--project-root",
+                        str(project_root),
+                        "--anomalies-output",
+                        str(outside_path),
+                    ],
+                ),
+                patch.object(build_anomalies, "require_duckdb") as require_duckdb,
+                self.assertRaisesRegex(ValueError, "inside the project root"),
+            ):
+                build_anomalies.main()
+
+            require_duckdb.assert_not_called()
+
     def write_weekly_input(self, con, weekly_path: Path, rows: list[tuple]) -> None:
         con.execute(
             """

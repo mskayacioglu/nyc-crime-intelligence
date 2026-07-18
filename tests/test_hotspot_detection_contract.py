@@ -1,7 +1,10 @@
 import importlib.util
+import sys
+import tempfile
 import unittest
 from datetime import date, timedelta
 from pathlib import Path
+from unittest.mock import patch
 
 
 MODULE_PATH = (
@@ -11,9 +14,103 @@ SPEC = importlib.util.spec_from_file_location("build_hotspots", MODULE_PATH)
 build_hotspots = importlib.util.module_from_spec(SPEC)
 assert SPEC.loader is not None
 SPEC.loader.exec_module(build_hotspots)
+PROJECT_ROOT = MODULE_PATH.parents[2]
 
 
 class HotspotDetectionContractTest(unittest.TestCase):
+    def test_metrics_paths_are_portable_and_external_paths_fail_closed(self) -> None:
+        inputs = {
+            "clean_events": PROJECT_ROOT / "data/processed/complaints_clean.parquet",
+            "weekly_area": None,
+        }
+        outputs = {
+            "hotspots": PROJECT_ROOT / "data/processed/hotspots.parquet",
+            "metrics": PROJECT_ROOT / "data/processed/hotspot_metrics.json",
+            "report": PROJECT_ROOT / "reports/hotspot_methodology.md",
+        }
+        severity_counts = [
+            {"hotspot_grain": grain, "hotspot_severity": label}
+            for grain in ("precinct", "grid")
+            for label in build_hotspots.SEVERITY_LABELS
+        ]
+
+        with (
+            patch.object(build_hotspots, "build_analysis_window", return_value={}),
+            patch.object(build_hotspots, "build_record_counts", return_value={}),
+            patch.object(
+                build_hotspots,
+                "build_severity_counts",
+                return_value=severity_counts,
+            ),
+            patch.object(build_hotspots, "build_top_hotspots", return_value=[]),
+            patch.object(build_hotspots, "build_coordinate_quality", return_value={}),
+        ):
+            payload = build_hotspots.build_metrics_payload(
+                None,
+                project_root=PROJECT_ROOT,
+                inputs=inputs,
+                outputs=outputs,
+                input_summary={},
+                windows={
+                    "baseline_end_date": date(2024, 1, 1),
+                    "recent_90_start_date": date(2024, 1, 2),
+                },
+                config=build_hotspots.HotspotConfig(),
+                scoring_end_date=date(2024, 1, 31),
+                latest_date_excluded_from_scoring=True,
+                top_n=1,
+            )
+
+        self.assertEqual(
+            payload["inputs"],
+            {
+                "clean_events": "data/processed/complaints_clean.parquet",
+                "weekly_area": None,
+            },
+        )
+        self.assertEqual(
+            payload["outputs"],
+            {
+                "hotspots": "data/processed/hotspots.parquet",
+                "metrics": "data/processed/hotspot_metrics.json",
+                "report": "reports/hotspot_methodology.md",
+            },
+        )
+        self.assertNotIn(str(PROJECT_ROOT), repr(payload["inputs"]))
+        self.assertNotIn(str(PROJECT_ROOT), repr(payload["outputs"]))
+
+        with self.assertRaisesRegex(ValueError, "inside the project root"):
+            build_hotspots.repository_relative_path(
+                PROJECT_ROOT,
+                PROJECT_ROOT.parent / "outside-hotspot-input.parquet",
+            )
+
+    def test_main_rejects_external_outputs_before_opening_duckdb(self) -> None:
+        with tempfile.TemporaryDirectory() as tmpdir:
+            directory = Path(tmpdir)
+            project_root = directory / "repository"
+            project_root.mkdir()
+            outside_path = directory / "hotspots.parquet"
+
+            with (
+                patch.object(
+                    sys,
+                    "argv",
+                    [
+                        "build_hotspots.py",
+                        "--project-root",
+                        str(project_root),
+                        "--hotspots-output",
+                        str(outside_path),
+                    ],
+                ),
+                patch.object(build_hotspots, "require_duckdb") as require_duckdb,
+                self.assertRaisesRegex(ValueError, "inside the project root"),
+            ):
+                build_hotspots.main()
+
+            require_duckdb.assert_not_called()
+
     def create_aggregate_bin_input(self, con, bins: list[tuple]) -> None:
         con.execute(
             f"""

@@ -91,16 +91,14 @@ mobile widths there was zero page horizontal overflow; mobile mode targets were
 44px and the canvas/detail were 333px wide. The browser console had no warnings
 or errors. The temporary Vite server was stopped.
 
-Historical clarification: the phrase “keyboard focus/selection” above records
-the Phase 7C.2 report's original conclusion, but it was not evidence of a
-successful native Tab/Shift+Tab/Enter/Space activation. A later in-app browser
-channel focused a native precinct control and showed its focus ring but could
-not dispatch activation. Phase 7C.3 subsequently closed that practical gate in
-Chrome against the real local application: Forecast and Expected Change each
-passed native Enter selection on Precinct 14, Tab focus movement to Precinct 40,
-and Space selection on Precinct 40 with synchronized detail and selection. The
-[Phase 7C.3 report](phase_7c3_precinct_spatial_rendering.md) preserves both the
-earlier tool limitation and the successful completion evidence.
+Current clarification: the phrase “keyboard focus/selection” above records the
+Phase 7C.2 report's original conclusion, but it is not evidence of a successful
+native Tab/Shift+Tab/Enter/Space activation. Later allowed-browser checks could
+focus a native precinct control and show its focus ring but could not deliver
+activation to the application. The exact remaining gate is documented in the
+[Phase 7C.3 report](phase_7c3_precinct_spatial_rendering.md), and Phase 7C.3
+remains verification-incomplete. This clarification does not close or weaken
+that blocker.
 
 The predictive implementation adds no dependency. The lazy Map JavaScript is
 188.47 kB / 54.46 kB gzip, about +18.26 / +4.47 kB versus the documented Phase
@@ -127,4 +125,5 @@ retaining the full keyboard-accessible list/detail experience and explicit
 missing, invalid, incomplete, and mismatch states. See the
 [Phase 7C.3 report](phase_7c3_precinct_spatial_rendering.md) for provenance,
 public-use assessment, processing, rendering semantics, safeguards, and
-verification, including the genuine Chrome Enter/Tab/Space acceptance sequence.
+verification. The spatial implementation and automated checks are complete,
+but the report's practical native-keyboard blocker remains open.

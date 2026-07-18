@@ -334,11 +334,11 @@ Leaflet stay behind the existing lazy-loading boundary.
 
 This report is the historical Phase 7B snapshot. Its statements that the map
 lacks Forecast, Expected Change, and verified precinct polygons describe that
-milestone, not the completed local product. Those capabilities were added later; see
+milestone, not the current implemented product. Those capabilities were added later; see
 the [Phase 7C.3 spatial report](phase_7c3_precinct_spatial_rendering.md), the
 [Anomalies report](dashboard_anomalies_view.md), and the
 [Governance report](dashboard_governance_view.md) for delivered behavior and
-completion evidence.
+verification evidence.
 
 ## Data-quality limitations
 

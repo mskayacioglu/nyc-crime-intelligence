@@ -383,6 +383,35 @@ def resolve_path(project_root: Path, value: Path | None, default_relative: Path)
     return (project_root / value).resolve()
 
 
+def repository_relative_path(project_root: Path, value: str | Path) -> str:
+    """Return a deterministic POSIX path rooted within the repository."""
+    root = project_root.resolve()
+    candidate = Path(value)
+    if not candidate.is_absolute():
+        candidate = root / candidate
+    try:
+        relative = candidate.resolve().relative_to(root)
+    except ValueError as exc:
+        raise ValueError(
+            "Hotspot metrics paths must be inside the project root."
+        ) from exc
+    return relative.as_posix()
+
+
+def repository_relative_optional_paths(
+    project_root: Path, values: dict[str, Path | None]
+) -> dict[str, str | None]:
+    """Normalize named optional paths for portable metrics and reports."""
+    return {
+        name: (
+            repository_relative_path(project_root, path)
+            if path is not None
+            else None
+        )
+        for name, path in values.items()
+    }
+
+
 def sql_string(value: str | Path) -> str:
     return "'" + str(value).replace("'", "''") + "'"
 
@@ -1452,7 +1481,8 @@ def validate_hotspot_metrics_payload(payload: dict[str, Any]) -> None:
 def build_metrics_payload(
     con: Any,
     *,
-    inputs: dict[str, Any],
+    project_root: Path,
+    inputs: dict[str, Path | None],
     outputs: dict[str, Path],
     input_summary: dict[str, Any],
     windows: dict[str, date],
@@ -1465,8 +1495,8 @@ def build_metrics_payload(
     payload = {
         "generated_at_utc": generated_at_utc,
         "phase": "Phase 6B - Aggregate Hotspot Detection Layer",
-        "inputs": inputs,
-        "outputs": {name: str(path) for name, path in outputs.items()},
+        "inputs": repository_relative_optional_paths(project_root, inputs),
+        "outputs": repository_relative_optional_paths(project_root, outputs),
         "run_metadata": {
             "generated_at_utc": generated_at_utc,
             "generated_at_utc_basis": (
@@ -1757,6 +1787,18 @@ def main() -> None:
         args.report_output,
         DEFAULT_REPORTS_DIR / REPORT_FILE,
     )
+    repository_relative_optional_paths(
+        project_root,
+        {
+            "processed_dir": processed_dir,
+            "reports_dir": reports_dir,
+            "clean_events": clean_events_path,
+            "weekly_area": weekly_path,
+            "hotspots": hotspots_path,
+            "metrics": metrics_path,
+            "report": report_path,
+        },
+    )
     config = HotspotConfig(
         grid_size_degrees=args.grid_size_degrees,
         min_precinct_recent_count=args.min_precinct_recent_count,
@@ -1815,11 +1857,12 @@ def main() -> None:
         "report": report_path,
     }
     inputs = {
-        "clean_events": str(clean_events_path),
-        "weekly_area": str(weekly_path) if weekly_available else None,
+        "clean_events": clean_events_path,
+        "weekly_area": weekly_path if weekly_available else None,
     }
     metrics_payload = build_metrics_payload(
         con,
+        project_root=project_root,
         inputs=inputs,
         outputs=outputs,
         input_summary=input_summary,

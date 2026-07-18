@@ -377,6 +377,47 @@ def resolve_path(project_root: Path, value: Path | None, default_relative: Path)
     return (project_root / value).resolve()
 
 
+def repository_relative_path(project_root: Path, value: str | Path) -> str:
+    """Return a deterministic POSIX path rooted within the repository."""
+    root = project_root.resolve()
+    candidate = Path(value)
+    if not candidate.is_absolute():
+        candidate = root / candidate
+    try:
+        relative = candidate.resolve().relative_to(root)
+    except ValueError as exc:
+        raise ValueError(
+            "Anomaly metrics paths must be inside the project root."
+        ) from exc
+    return relative.as_posix()
+
+
+def repository_relative_optional_paths(
+    project_root: Path, values: dict[str, Path | None]
+) -> dict[str, str | None]:
+    """Normalize named optional paths for portable metrics and reports."""
+    return {
+        name: (
+            repository_relative_path(project_root, path)
+            if path is not None
+            else None
+        )
+        for name, path in values.items()
+    }
+
+
+def repository_relative_ml_status(
+    project_root: Path, ml_status: dict[str, Any]
+) -> dict[str, Any]:
+    """Normalize the path fields nested in ML availability metadata."""
+    portable_status = dict(ml_status)
+    for key, value in portable_status.items():
+        if not key.endswith("_path") or value is None:
+            continue
+        portable_status[key] = repository_relative_path(project_root, value)
+    return portable_status
+
+
 def sql_string(value: str | Path) -> str:
     return "'" + str(value).replace("'", "''") + "'"
 
@@ -1313,7 +1354,8 @@ def validate_anomaly_metrics_payload(payload: dict[str, Any]) -> None:
 def build_metrics_payload(
     con: Any,
     *,
-    inputs: dict[str, Any],
+    project_root: Path,
+    inputs: dict[str, Path | None],
     outputs: dict[str, Path],
     input_summary: dict[str, Any],
     ml_summary: dict[str, Any],
@@ -1326,8 +1368,8 @@ def build_metrics_payload(
     payload = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "phase": "Phase 6A - Anomaly Detection Layer",
-        "inputs": inputs,
-        "outputs": {name: str(path) for name, path in outputs.items()},
+        "inputs": repository_relative_optional_paths(project_root, inputs),
+        "outputs": repository_relative_optional_paths(project_root, outputs),
         "anomaly_columns_used": ANOMALY_COLUMNS_USED,
         "historical_feature_columns": HISTORICAL_FEATURE_COLUMNS,
         "output_columns": ANOMALY_OUTPUT_COLUMNS,
@@ -1367,7 +1409,9 @@ def build_metrics_payload(
             ),
             "random_splits_used": False,
             "latest_week_excluded_from_scoring": latest_week_excluded_from_scoring,
-            "ml_prediction_status": ml_status,
+            "ml_prediction_status": repository_relative_ml_status(
+                project_root, ml_status
+            ),
         },
         "ethics": {
             "sensitive_columns_excluded": SENSITIVE_COLUMNS,
@@ -1560,6 +1604,20 @@ def main() -> None:
         args.report_output,
         DEFAULT_REPORTS_DIR / REPORT_FILE,
     )
+    repository_relative_optional_paths(
+        project_root,
+        {
+            "processed_dir": processed_dir,
+            "reports_dir": reports_dir,
+            "model_dir": model_dir,
+            "weekly_area": weekly_path,
+            "ml_predictions": ml_predictions_path,
+            "model_manifest": model_manifest_path,
+            "anomalies": anomalies_path,
+            "metrics": metrics_path,
+            "report": report_path,
+        },
+    )
     config = AnomalyConfig(
         min_prior_total_count=args.min_prior_total_count,
         min_actual_count=args.min_actual_count,
@@ -1608,8 +1666,8 @@ def main() -> None:
             create_empty_ml_prediction_view(con)
             ml_status = {
                 "status": "skipped_missing_manifest",
-                "predictions_path": str(ml_predictions_path),
-                "model_manifest_path": str(model_manifest_path),
+                "predictions_path": ml_predictions_path,
+                "model_manifest_path": model_manifest_path,
                 "manifest_available": False,
             }
         elif ml_predictions_are_leakage_safe(manifest):
@@ -1617,8 +1675,8 @@ def main() -> None:
             create_ml_prediction_view(con, ml_predictions_path)
             ml_status = {
                 "status": "used",
-                "predictions_path": str(ml_predictions_path),
-                "model_manifest_path": str(model_manifest_path)
+                "predictions_path": ml_predictions_path,
+                "model_manifest_path": model_manifest_path
                 if model_manifest_path.exists()
                 else None,
                 "manifest_available": manifest is not None,
@@ -1629,8 +1687,8 @@ def main() -> None:
             create_empty_ml_prediction_view(con)
             ml_status = {
                 "status": "skipped_manifest_leakage_controls",
-                "predictions_path": str(ml_predictions_path),
-                "model_manifest_path": str(model_manifest_path),
+                "predictions_path": ml_predictions_path,
+                "model_manifest_path": model_manifest_path,
                 "manifest_available": True,
             }
     else:
@@ -1638,8 +1696,8 @@ def main() -> None:
         create_empty_ml_prediction_view(con)
         ml_status = {
             "status": "not_available",
-            "predictions_path": str(ml_predictions_path),
-            "model_manifest_path": str(model_manifest_path)
+            "predictions_path": ml_predictions_path,
+            "model_manifest_path": model_manifest_path
             if model_manifest_path.exists()
             else None,
             "manifest_available": manifest is not None,
@@ -1662,12 +1720,13 @@ def main() -> None:
         "report": report_path,
     }
     inputs = {
-        "weekly_area": str(weekly_path),
-        "ml_predictions": str(ml_predictions_path) if ml_predictions_path.exists() else None,
-        "ml_model_manifest": str(model_manifest_path) if model_manifest_path.exists() else None,
+        "weekly_area": weekly_path,
+        "ml_predictions": ml_predictions_path if ml_predictions_path.exists() else None,
+        "ml_model_manifest": model_manifest_path if model_manifest_path.exists() else None,
     }
     metrics_payload = build_metrics_payload(
         con,
+        project_root=project_root,
         inputs=inputs,
         outputs=outputs,
         input_summary=input_summary,

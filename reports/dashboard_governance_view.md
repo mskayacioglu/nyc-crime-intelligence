@@ -292,15 +292,15 @@ allowed browser surface provides no safe request-interception facility and no
 temporary production switch or harness was justified; explicit error and
 recovery behavior is covered automatically.
 
-Pointer activation opened and collapsed the native provenance disclosure. An
-earlier in-app browser channel left focus on the Governance button after a Tab
-request while showing its visible two-pixel focus ring. Its Enter/Space delivery
-to the focused native summary failed because that channel could not maintain the
-focused locator target. No custom handler or synthetic event was used. Native
-navigation and disclosure keyboard behavior pass automated tests. This remains
-historical tool-channel evidence. Phase 7C.3 later completed genuine Chrome
-Enter/Tab/Space acceptance on the real predictive native-button path; the
-Governance channel result is not an open local completion gate.
+Pointer activation opened and collapsed the native provenance disclosure. The
+permitted in-app browser left focus on the Governance button after a genuine
+Tab request while showing its visible two-pixel focus ring. Its Enter/Space
+delivery to the focused native summary failed because the browser channel could
+not maintain the focused locator target. No custom handler, alternate browser,
+or synthetic event was used. Native navigation and disclosure keyboard behavior
+pass automated tests. This browser-channel limitation does not change or close
+the separate Phase 7C.3 verification blocker, whose wording and status remain
+untouched.
 
 Every temporary browser tab and viewport override was finalized, the
 development server was stopped, and port 4173 was left free.
@@ -405,10 +405,9 @@ do not edit the staged JSON manually or substitute the wall clock.
 - Historical error metrics are overall context and cannot be interpreted as
   filter-specific performance.
 - Spatial freshness is the only documented wall-clock TTL classification.
-- An earlier in-app browser channel could not complete the Governance
-  Tab/Shift+Tab/Enter/Space pass. Automated native-control coverage passes, and
-  the completed Phase 7C.3 Chrome run separately supplies genuine predictive
-  native-button Enter/Tab/Space evidence on the real local application.
+- The permitted browser channel cannot complete a genuine practical
+  Tab/Shift+Tab/Enter/Space activation pass. Automated native-control coverage
+  passes, and the existing Phase 7C.3 blocker remains verification-incomplete.
 
 ## Implementation inventory
 

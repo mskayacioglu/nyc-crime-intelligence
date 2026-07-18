@@ -236,6 +236,7 @@ the reviewed cleaning horizon:
 
 ```bash
 .venv/bin/python src/data/build_clean_dataset.py --as-of-date 2026-07-04
+.venv/bin/python src/analytics/build_dashboard_summary.py
 .venv/bin/python src/models/build_baseline_forecast.py
 .venv/bin/python src/models/build_ml_forecast.py
 .venv/bin/python src/analytics/build_hotspots.py
@@ -245,6 +246,12 @@ the reviewed cleaning horizon:
 .venv/bin/python src/analytics/build_dashboard_forecast_map.py
 .venv/bin/python src/analytics/build_dashboard_precinct_spatial_reference.py
 ```
+
+Path-bearing cleaning, analytical-summary, model, hotspot, and anomaly metadata
+uses repository-relative POSIX references. Those builders reject a source or
+output reference outside the declared project root instead of serializing an
+absolute path or local username. Runtime console messages may still identify
+the path being processed, but persisted JSON and Markdown do not.
 
 Advance `--as-of-date` only as part of an intentional source refresh and record
 the new review horizon. See the [root README](../README.md) and
@@ -390,7 +397,7 @@ When the local development server is running, use
 ## Verify
 
 The reviewed 2026-07-18 repository baseline is 214 Vitest tests across 15 files,
-122 discovered Python contract tests, and three full-data integration tests.
+133 discovered Python contract tests, and three full-data integration tests.
 The production build transforms 2,365 modules, and both the clean install and
 explicit production dependency audit report zero vulnerabilities. The named
 subsections below retain the exact counts, bundle sizes, and practical results
@@ -558,13 +565,12 @@ the recovery contained no console warnings or errors. The required
 and no failed request surfaced in the clean session. No temporary production
 fixture or state harness was added or left behind.
 
-An earlier in-app browser channel focused the native anomaly result and showed
-the visible focus ring, but did not deliver genuine Tab/Enter/Space activation
-to the application. No custom keyboard handler or synthetic event was used.
-Native-button Enter/Space behavior and selection/detail synchronization pass in
-Vitest. This is retained as historical browser-channel evidence; Phase 7C.3
-later completed genuine Chrome native-keyboard acceptance on the predictive
-list path.
+The installed in-app browser again focused the native anomaly result and showed
+the visible focus ring, but it did not deliver genuine Tab/Enter/Space
+activation to the application. No custom keyboard handler or alternate browser
+surface was used. Native-button Enter/Space behavior and selection/detail
+synchronization pass in Vitest. This recorded browser-channel limitation does
+not change or close the separate Phase 7C.3 verification blocker below.
 
 ### Governance increment verification
 
@@ -604,11 +610,11 @@ The Governance loading state was observed. Browser-visible network failure and
 recovery were not forced because the allowed surface provides no safe request
 interception and no temporary production harness was justified; those states
 pass focused automated coverage. Pointer activation opened and collapsed the
-native disclosure. An earlier in-app browser channel showed the visible
-two-pixel focus ring but did not move focus on a Tab request, and its Enter/Space
-delivery could not maintain the focused summary target. No custom handler or
-synthetic event was used. This Governance result is a historical tool-channel
-limitation, not an open Phase 7C.3 gate.
+native disclosure. The in-app browser showed the visible two-pixel focus ring
+but again did not move focus on a genuine Tab request, and its Enter/Space
+delivery could not maintain the focused summary target. No custom handler,
+alternate browser, or synthetic event was used. This Governance browser-channel
+limitation does not change or close the Phase 7C.3 blocker below.
 
 ### Phase 7C.3 verification
 
@@ -648,18 +654,13 @@ control measured below 44 pixels. Mobile filters opened and closed normally.
 The browser exposed no reduced-motion emulation; one loaded reduced-motion rule
 and its Vitest contract were confirmed without claiming runtime emulation.
 
-Phase 7C.3 is complete. The closing Chrome acceptance used genuine native
-keyboard input against the real local application. In Forecast, Enter selected
-Precinct 14 and changed its `aria-pressed` state from false to true; the detail
-updated. Tab moved focus to Precinct 40. Space selected Precinct 40, cleared the
-Precinct 14 selection, and updated the detail. Expected Change passed the same
-Enter, Tab, and Space sequence with synchronized detail and selection.
-
-The earlier in-app browser attempt focused the exact native precinct controls
-and rendered the visible 2-pixel focus ring but did not dispatch activation.
-That historical tool limitation is preserved in the Phase 7C.3 report; it is
-not substituted for the successful Chrome evidence, and no synthetic event or
-state mutation is used to claim completion.
+Phase 7C.3 remains verification-incomplete for one practical browser check.
+The in-app browser focused the exact native precinct button and rendered the
+visible 2-pixel focus ring, but its documented Tab/Enter/Space channels did not
+dispatch activation, so the selected detail did not change. The native-button
+keyboard test passes in Vitest, but policy was not bypassed through another
+browser surface. A successful allowed practical keyboard activation is the
+exact remaining gate.
 
 ## Map contract and filter semantics
 

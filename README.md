@@ -23,14 +23,13 @@ The repository includes these dashboard experiences:
 | Governance | Dataset/model coverage, quality warnings, lifecycle facts, readiness, and responsible-use limits | Dataset/model artifact scope, independent of dashboard filters |
 
 Overview, Map & Hotspots, Forecast, Expected Change, Anomalies, and Governance
-are implemented and locally verified. Phase 7C.3 precinct rendering is complete:
-all automated checks pass, and a genuine native-keyboard acceptance run in
-Chrome exercised the real local application. In Forecast, Enter selected
-Precinct 14, Tab moved focus to Precinct 40, and Space selected Precinct 40;
-`aria-pressed`, polygon selection, and detail content stayed synchronized. The
-same Enter/Tab/Space sequence passed in Expected Change. An earlier in-app
-browser channel focused the controls without dispatching activation; that tool
-limitation remains in the audit history and is not used as completion evidence.
+are implemented. Verified precinct rendering is also implemented and passes its
+automated checks. Phase 7C.3 remains verification-incomplete for one practical
+keyboard check: the permitted in-app browser can render the focused native
+precinct control and its visible focus ring, but its Tab/Enter/Space channel has
+not delivered a successful activation to the application. Automated
+native-button coverage passes, and no alternate or synthetic browser mechanism
+is used to close that gate.
 
 ## Reviewed data and model context
 
@@ -151,6 +150,12 @@ repository root in dependency order:
 .venv/bin/python src/analytics/build_hotspots.py
 .venv/bin/python src/analytics/build_anomalies.py
 ```
+
+The cleaning, analytical-summary, baseline, ML, hotspot, and anomaly builders
+serialize allowlisted file references as stable POSIX paths relative to the
+declared project root. They fail closed before writing metadata if a referenced
+path escapes that root, so generated JSON and Markdown do not retain a local
+username or absolute filesystem prefix.
 
 These are full-data builds and can require substantial disk, memory, and run
 time. The explicit `--as-of-date 2026-07-04` reproduces the review horizon used

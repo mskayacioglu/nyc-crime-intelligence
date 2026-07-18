@@ -44,21 +44,22 @@ Because the demographic fields have high missingness and present ethical risks, 
 
 ### Roadmap status and scope boundary
 
-The local product roadmap is complete. Sections 5 through 11 preserve the
-original plan and its delivered results; their proposal, task, sprint, and
-expected-output language is historical context, not an open implementation
-queue. The delivered local state is:
+The local implementation roadmap is delivered except for the explicitly open
+Phase 7C.3 practical native-keyboard verification gate. Sections 5 through 11
+preserve the original plan and its delivered results; their proposal, task,
+sprint, and expected-output language is historical context rather than an open
+implementation queue. The reviewed local state is:
 
 | Product work | Local status |
 | --- | --- |
 | Data exploration, cleaning, aggregation, analytical baseline, baseline forecast, ML forecast, hotspots, and anomalies | Complete and verified |
 | Overview, Map & Hotspots, Forecast, Expected Change, Anomalies, and Governance | Complete and distinct |
-| Phase 7C.3 official precinct rendering, responsive behavior, failure states, and native-keyboard interaction | Complete and verified |
+| Phase 7C.3 official precinct rendering, responsive behavior, and failure states | Implementation and automated checks complete; practical native-keyboard verification incomplete |
 
 Any external publication or release work is intentionally deferred to a future,
 separate discussion. Hosting, distribution, adding a Git remote, creating tags
-or release records, and preparing an external model or dataset upload are not
-remaining local product work, and none is performed by this roadmap closure.
+or release records, and preparing an external model or dataset upload are
+outside this local implementation roadmap, and none is performed here.
 The historical API, database, framework, and deployment ideas in Sections 12–14
 were exploratory options, not delivered requirements or prerequisites for local
 completion.
@@ -295,18 +296,17 @@ Proposed views:
 
 ### Phase 7C — Predictive Map
 
-Status: complete. Phase 7C.1 — Forecast Map Data Contract, Phase 7C.2 — Predictive
-Map UI & Integration, and Phase 7C.3 — Verified Precinct Spatial Rendering all
-pass their required checks. Practical responsive checks at 1280 × 900,
-768 × 1024, and 390 × 844 passed, as did spatial error/stale/mismatch states,
-tile-failure resilience, and clean console/network activity. A genuine
-native-keyboard acceptance run in Chrome closed the final practical gate on the
-real local application: Forecast Enter selected Precinct 14, Tab moved focus to
-Precinct 40, and Space selected Precinct 40, with `aria-pressed`, detail, and
-polygon selection synchronized; Expected Change passed the same sequence. An
-earlier in-app browser channel focused controls and displayed the focus ring but
-did not dispatch activation. That historical tool limitation is retained in the
-audit record and is not the completion evidence. The May 2026 26B Police
+Status: Phase 7C.1 — Forecast Map Data Contract and Phase 7C.2 — Predictive Map UI
+& Integration are complete. The Phase 7C.3 — Verified Precinct Spatial Rendering
+implementation and all automated checks are complete. Practical responsive checks
+at 1280 × 900, 768 × 1024, and 390 × 844 passed, as did checks for spatial
+error/stale/mismatch states, tile-failure resilience, and clean console/network
+activity. However, although
+the in-app browser's documented keyboard channels correctly focused the native
+list button and displayed its visible focus ring, they did not deliver the
+Enter/Space activation event to the page. Policy was not bypassed by using another
+browser surface; Phase 7C.3 remains verification-incomplete until this final
+practical keyboard gate is successfully repeated. The May 2026 26B Police
 Precincts source from the NYC Department of City Planning / NYC Open Data was
 vendored reproducibly, validated one-to-one against all 78
 `nypd-precinct:<label>` keys in the Forecast contract, and used to render
@@ -445,12 +445,11 @@ Delivered experience:
 - At 1280 x 900, 768 x 1024, and 390 x 844, there is no page-level horizontal
   overflow; mobile controls are at least 44 px.
 
-An earlier in-app browser channel focused the native button and displayed a
-visible focus ring, but did not deliver actual Tab/Enter/Space events to the
-application. No application-specific keyboard handler was added; native-control
-behavior was validated with automated regression tests. The later Chrome
-acceptance exercised genuine Enter, Tab, and Space behavior on the real local
-application and closed the separate Phase 7C.3 practical gate described above.
+The current in-app browser focused the native button and displayed a visible
+focus ring, but did not deliver actual Tab/Enter/Space events to the application.
+No application-specific keyboard handler was added; native-control behavior was
+validated with automated regression tests. This tool limitation does not change
+or close the separate Phase 7C.3 verification-incomplete gate described above.
 
 The implementation, data contract, validation, and boundaries are documented in
 `reports/dashboard_anomalies_view.md`.
@@ -741,9 +740,10 @@ Risk: Developing a complex model too early may slow product progress.
 
 Mitigation: Follow a baseline-first, ML-model-second approach.
 
-## 18. Local Objective Achieved
+## 18. Local Implementation Objective
 
-The completed local product is:
+The implemented local product, with the Phase 7C.3 practical verification gate
+still open as documented above, is:
 
 ```text
 NYC Crime Intelligence Dashboard

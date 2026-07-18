@@ -251,6 +251,31 @@ def resolve_path(project_root: Path, value: Path | None, default_relative: Path)
     return (project_root / value).resolve()
 
 
+def repository_relative_path(project_root: Path, value: str | Path) -> str:
+    """Return a deterministic POSIX path rooted within the repository."""
+    root = project_root.resolve()
+    candidate = Path(value)
+    if not candidate.is_absolute():
+        candidate = root / candidate
+    try:
+        relative = candidate.resolve().relative_to(root)
+    except ValueError as exc:
+        raise ValueError(
+            "Cleaning artifact paths must be inside the project root."
+        ) from exc
+    return relative.as_posix()
+
+
+def repository_relative_paths(
+    project_root: Path, values: dict[str, Path]
+) -> dict[str, str]:
+    """Normalize a named path collection for portable summaries and reports."""
+    return {
+        name: repository_relative_path(project_root, path)
+        for name, path in values.items()
+    }
+
+
 def sql_string(value: str | Path) -> str:
     return "'" + str(value).replace("'", "''") + "'"
 
@@ -620,6 +645,7 @@ def summarize_outputs(con: Any, outputs: dict[str, Path]) -> dict[str, Any]:
 def write_summary_json(
     summary_path: Path,
     *,
+    project_root: Path,
     raw_csv_path: Path,
     processed_dir: Path,
     reports_dir: Path,
@@ -631,15 +657,16 @@ def write_summary_json(
     quality_counts: list[dict[str, Any]],
     output_summary: dict[str, Any],
 ) -> None:
+    portable_outputs = repository_relative_paths(project_root, outputs)
     payload = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
-        "source_file": str(raw_csv_path),
+        "source_file": repository_relative_path(project_root, raw_csv_path),
         "source_file_size_gb": raw_csv_path.stat().st_size / (1024**3),
-        "processed_dir": str(processed_dir),
-        "reports_dir": str(reports_dir),
+        "processed_dir": repository_relative_path(project_root, processed_dir),
+        "reports_dir": repository_relative_path(project_root, reports_dir),
         "config": config,
         "column_validation": column_validation,
-        "outputs": {name: str(path) for name, path in outputs.items()},
+        "outputs": portable_outputs,
         "overall": overall,
         "date_quality": date_quality,
         "quality_flags": quality_counts,
@@ -653,6 +680,7 @@ def write_summary_json(
 def write_cleaning_report(
     report_path: Path,
     *,
+    project_root: Path,
     raw_csv_path: Path,
     outputs: dict[str, Path],
     config: dict[str, Any],
@@ -661,6 +689,9 @@ def write_cleaning_report(
     quality_counts: list[dict[str, Any]],
     output_summary: dict[str, Any],
 ) -> None:
+    portable_raw_csv_path = repository_relative_path(project_root, raw_csv_path)
+    portable_outputs = repository_relative_paths(project_root, outputs)
+    portable_report_path = repository_relative_path(project_root, report_path)
     sorted_quality = sorted(quality_counts, key=lambda row: row["issue_count"], reverse=True)
     lines = [
         "# NYPD Complaint Data Historic - Cleaning and Aggregation Report",
@@ -669,7 +700,7 @@ def write_cleaning_report(
         "",
         "## Source",
         "",
-        f"- File: `{raw_csv_path}`",
+        f"- File: `{portable_raw_csv_path}`",
         f"- File size GB: `{raw_csv_path.stat().st_size / (1024**3):,.2f}`",
         f"- Sample rows mode: `{config.get('sample_rows')}`",
         "",
@@ -691,11 +722,11 @@ def write_cleaning_report(
         "",
         "## Outputs",
         "",
-        f"- Clean event parquet: `{outputs['clean_events']}`",
-        f"- Weekly aggregate parquet: `{outputs['weekly']}`",
-        f"- Monthly aggregate parquet: `{outputs['monthly']}`",
-        f"- Cleaning summary JSON: `{outputs['summary']}`",
-        f"- Cleaning report: `{report_path}`",
+        f"- Clean event parquet: `{portable_outputs['clean_events']}`",
+        f"- Weekly aggregate parquet: `{portable_outputs['weekly']}`",
+        f"- Monthly aggregate parquet: `{portable_outputs['monthly']}`",
+        f"- Cleaning summary JSON: `{portable_outputs['summary']}`",
+        f"- Cleaning report: `{portable_report_path}`",
         "",
         "## Overall Counts",
         "",
@@ -750,6 +781,16 @@ def main() -> None:
     processed_dir = resolve_path(project_root, args.processed_dir, DEFAULT_PROCESSED_DIR)
     reports_dir = resolve_path(project_root, args.reports_dir, DEFAULT_REPORTS_DIR)
     duckdb_database = resolve_path(project_root, args.duckdb_database, DEFAULT_DUCKDB_DATABASE)
+
+    repository_relative_paths(
+        project_root,
+        {
+            "raw_csv": raw_csv_path,
+            "processed_dir": processed_dir,
+            "reports_dir": reports_dir,
+            "duckdb_database": duckdb_database,
+        },
+    )
 
     if not raw_csv_path.exists():
         raise FileNotFoundError(f"Raw CSV not found: {raw_csv_path}")
@@ -822,6 +863,7 @@ def main() -> None:
     print(f"Writing cleaning summary: {summary_path}")
     write_summary_json(
         summary_path,
+        project_root=project_root,
         raw_csv_path=raw_csv_path,
         processed_dir=processed_dir,
         reports_dir=reports_dir,
@@ -837,6 +879,7 @@ def main() -> None:
     print(f"Writing cleaning report: {report_path}")
     write_cleaning_report(
         report_path,
+        project_root=project_root,
         raw_csv_path=raw_csv_path,
         outputs=outputs,
         config=config,

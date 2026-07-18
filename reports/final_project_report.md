@@ -333,12 +333,14 @@ values remain accessible.
 
 ### Automated verification
 
-The final local acceptance pass runs from the reviewed `main` tree. Python uses
+The normal automated verification pass runs from the reviewed `main` tree. Python uses
 the pinned project environment, and the dashboard is reinstalled from its
 lockfile with `npm ci`; ignored raw and processed artifacts are used only by the
-explicit full-data integration pass. Separate clean-copy portability contracts
-exercise generated paths outside the repository and reject project-root leakage
-from model metrics, manifests, reports, and browser-safe artifacts.
+explicit full-data integration pass. Portability contracts construct temporary
+repository roots, require stable POSIX-relative references in cleaning,
+analytical-summary, baseline, ML, hotspot, and anomaly metadata, and reject any
+reference that escapes its declared root. Clean-copy contracts separately reject
+project-root leakage from tracked reports and browser-safe artifacts.
 
 The normal verification command checks:
 
@@ -353,15 +355,17 @@ The normal verification command checks:
 - `git diff --check HEAD`; and
 - port 4173 before and after the run.
 
-On 2026-07-18, the required final local acceptance run completed on `main` with
-no configured remote. All 122 Python contract tests passed; all three full-data
-integration tests passed; ESLint passed; all 214 Vitest tests across 15 files
-passed; and the TypeScript/Vite build completed after transforming 2,365
-modules. The fresh `npm ci` install audited 278 packages with zero
-vulnerabilities, the explicit production audit also reported zero
-vulnerabilities, Markdown/language/privacy/path/notebook hygiene passed,
-`git diff --check HEAD` passed, and port 4173 was free before and after
-verification.
+On 2026-07-18, the combined full-data acceptance run completed on `main` with
+no configured remote: the then-existing 129 Python contract tests, all three
+full-data integration tests, ESLint, and all 214 Vitest tests across 15 files
+passed; the TypeScript/Vite build transformed 2,365 modules. The subsequent
+portable-path preflight hardening added four Python contracts without changing
+frontend code or browser-safe artifacts; final Python discovery passed all 133
+tests and the directly affected documentation/builder suites passed 43 tests.
+The fresh `npm ci` install audited 278 packages with zero vulnerabilities, the
+explicit production audit also reported zero vulnerabilities,
+Markdown/language/privacy/path/notebook hygiene passed, `git diff --check HEAD`
+passed, and port 4173 was free before and after verification.
 
 That production build reported these raw/gzip sizes:
 
@@ -396,9 +400,8 @@ full-data artifacts present, all three integration tests passed on 2026-07-18.
 Practical checks cover 1280 × 900, 768 × 1024, and 390 × 844 layouts; loading,
 empty, invalid, incompatible, stale, network, and tile-failure states; map/list/
 detail synchronization; zero and missing baselines; visible focus; overflow;
-console output; and required data requests. Phase 7C.3 also has a successful
-native-keyboard acceptance on the real local application; the evidence and the
-earlier tool-channel limitation are recorded below.
+console output; and required data requests. The separate Phase 7C.3 keyboard
+gate is recorded below and is not concealed by automated coverage.
 
 ## Reproducibility instructions
 
@@ -555,22 +558,21 @@ zeros, generic health labels, or guessed policy.
 
 ## Phase 7C.3 state
 
-Phase 7C.3 is complete. The official 78-feature precinct geometry,
+Phase 7C.3 is code-complete and automated-check complete, but
+**verification-incomplete**. The official 78-feature precinct geometry,
 deterministic builder, Python and browser validators, and Forecast/Expected
 Change polygon rendering are implemented. Desktop, tablet, mobile, state,
-tile-failure, precision, responsive, console, network, and native-keyboard
-checks passed.
+tile-failure, precision, responsive, console, and network checks passed.
 
-The genuine keyboard acceptance used Chrome against the real local application.
-In Forecast, native Enter changed Precinct 14 from `aria-pressed="false"` to
-`"true"` and updated the detail; Tab moved focus to Precinct 40; native Space
-selected Precinct 40, cleared the Precinct 14 selection, and updated the detail.
-Expected Change passed the same Enter, Tab, and Space sequence with synchronized
-selection and detail.
+In the allowed in-app browser, native Precinct 14 and Precinct 40 controls
+received focus and displayed the expected focus ring, but Tab/Enter/Space did
+not activate them; `aria-pressed`, the Precinct 75 detail, and polygon selection
+remained unchanged. Automated native-button coverage passes. No alternate
+browser surface, direct event dispatch, raw protocol access, or synthetic state
+mutation was used to claim success.
 
-An earlier in-app browser channel focused Precinct 14 and Precinct 40 and showed
-the expected focus ring but did not dispatch Tab/Enter/Space activation. That
-historical tool limitation remains documented; it is not substituted for the
-successful Chrome observation, and no direct event dispatch or synthetic state
-mutation is used as evidence. The detailed record is in the
+The single remaining Phase 7C.3 gate is one successful practical native-button
+activation through an allowed in-app browser session. Until that observation
+is recorded, the milestone must remain verification-incomplete. The detailed
+evidence is in the
 [Phase 7C.3 spatial rendering report](phase_7c3_precinct_spatial_rendering.md).
