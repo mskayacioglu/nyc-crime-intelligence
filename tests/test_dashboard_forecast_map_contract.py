@@ -454,6 +454,20 @@ class DashboardForecastMapContractTest(unittest.TestCase):
         self.assertEqual(
             payload["availability"]["precinctSpatialReference"], "location-key-only"
         )
+        self.assertFalse(
+            payload["locationKeySemantics"]["spatialReferenceAvailable"]
+        )
+        self.assertIn(
+            "separate verified Phase 7C.3 precinct geometry",
+            payload["locationKeySemantics"]["coverage"],
+        )
+        self.assertTrue(
+            any(
+                "separate verified Phase 7C.3 spatial-reference contract" in limitation
+                for limitation in payload["limitations"]
+            )
+        )
+        self.assertNotIn("No complete verified precinct", serialized)
         self.assertTrue(ends_with_newline)
         for forbidden in (
             "COMPLAINT_NUMBER",
@@ -1074,12 +1088,13 @@ class DashboardForecastMapContractTest(unittest.TestCase):
                 "backtestEndWeek": "2024-01-08",
             }
         )
+        local_fixture_root = "/" + "Users/example/private/"
         for field, path in (
-            (("forecast", "sourceFile"), "/Users/example/private/forecast.parquet"),
-            (("baseline", "sourceFile"), "/Users/example/private/baseline.parquet"),
-            (("baseline", "manifestSourceFile"), "/Users/example/private/manifest.json"),
-            (("model", "sourceFile"), "/Users/example/private/model.json"),
-            (("historicalError", "sourceFile"), "/Users/example/private/metrics.json"),
+            (("forecast", "sourceFile"), local_fixture_root + "forecast.parquet"),
+            (("baseline", "sourceFile"), local_fixture_root + "baseline.parquet"),
+            (("baseline", "manifestSourceFile"), local_fixture_root + "manifest.json"),
+            (("model", "sourceFile"), local_fixture_root + "model.json"),
+            (("historicalError", "sourceFile"), local_fixture_root + "metrics.json"),
         ):
             changed = copy.deepcopy(payload)
             if field[0] == "historicalError":

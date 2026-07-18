@@ -283,6 +283,16 @@ def repository_relative_path(project_root: Path, value: str | Path) -> str:
     return relative.as_posix()
 
 
+def repository_relative_paths(
+    project_root: Path, values: dict[str, Path]
+) -> dict[str, str]:
+    """Normalize a named path collection for portable metrics and reports."""
+    return {
+        name: repository_relative_path(project_root, path)
+        for name, path in values.items()
+    }
+
+
 def sql_string(value: str | Path) -> str:
     return "'" + str(value).replace("'", "''") + "'"
 
@@ -1151,6 +1161,7 @@ def validate_metrics_payload(payload: dict[str, Any]) -> None:
 def build_metrics_payload(
     con: Any,
     *,
+    project_root: Path,
     inputs: dict[str, Path],
     outputs: dict[str, Path],
     input_summary: dict[str, Any],
@@ -1175,8 +1186,8 @@ def build_metrics_payload(
     payload = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "phase": "Phase 5 - ML Forecast Model",
-        "inputs": {name: str(path) for name, path in inputs.items()},
-        "outputs": {name: str(path) for name, path in outputs.items()},
+        "inputs": repository_relative_paths(project_root, inputs),
+        "outputs": repository_relative_paths(project_root, outputs),
         "forecast_columns_used": FORECAST_COLUMNS_USED,
         "engineered_feature_columns": ENGINEERED_FEATURE_COLUMNS,
         "model_feature_columns": MODEL_FEATURE_COLUMNS,
@@ -1392,12 +1403,28 @@ def write_ml_report(path: Path, payload: dict[str, Any]) -> None:
     selected_params = payload["model_config"]["selected_parameters"]
 
     beat_sentence = (
-        "The ML model beat the Phase 4 best baseline on MAE, RMSE, and weighted MAE."
+        "The ML model recorded lower MAE, RMSE, and weighted MAE than the Phase 4 "
+        "best baseline in the manifest-level comparison."
         if comparison["beats_baseline_all_core_metrics"]
         else (
-            "The ML model did not beat the Phase 4 best baseline on every core metric. "
+            "The ML model did not record a lower value than the Phase 4 best baseline "
+            "on every core metric in the manifest-level comparison. "
             f"Beat flags: MAE={beats.get('mae')}, RMSE={beats.get('rmse')}, "
             f"weighted MAE={beats.get('weighted_mae')}."
+        )
+    )
+    baseline_reference = comparison["baseline_reference"]
+    baseline_prediction_count = baseline_reference.get("prediction_count")
+    ml_prediction_count = overall.get("prediction_count")
+    coverage_note = (
+        "The comparison uses different prediction coverage—"
+        f"{format_value(baseline_prediction_count)} baseline rows versus "
+        f"{format_value(ml_prediction_count)} ML rows. It is not a matched-row, "
+        "like-for-like gain; the metric deltas are descriptive."
+        if baseline_prediction_count != ml_prediction_count
+        else (
+            "The comparison records equal prediction counts, but the aggregate metrics do not "
+            "establish that the evaluated rows are identical; the metric deltas are descriptive."
         )
     )
 
@@ -1452,9 +1479,9 @@ def write_ml_report(path: Path, payload: dict[str, Any]) -> None:
         "",
         (
             f"`{MODEL_NAME}` is a deterministic lag-ensemble regressor selected by "
-            f"{payload['model_config']['selection_objective']}. It uses DuckDB and the "
-            "Python standard library only because scikit-learn is not available in the "
-            "local project environment."
+            f"{payload['model_config']['selection_objective']}. It uses the pinned DuckDB "
+            "dependency and the Python standard library; scikit-learn is not a project "
+            "dependency."
         ),
         "",
         "Formula:",
@@ -1509,6 +1536,7 @@ def write_ml_report(path: Path, payload: dict[str, Any]) -> None:
         ),
         "",
         beat_sentence,
+        coverage_note,
         "",
         "## Borough Metrics",
         "",
@@ -1559,6 +1587,7 @@ def write_ml_report(path: Path, payload: dict[str, Any]) -> None:
         "## Interpretation",
         "",
         f"- Baseline comparison: {beat_sentence}",
+        f"- Coverage qualification: {coverage_note}",
         (
             f"- Hardest segments: `{hardest_label}` is among the highest-error borough/offense "
             "groups after filtering for meaningful volume; these errors are concentrated in "
@@ -1571,9 +1600,10 @@ def write_ml_report(path: Path, payload: dict[str, Any]) -> None:
             "events, spatial spillover, or uncertainty intervals."
         ),
         (
-            "- Before dashboard use: add prediction intervals, monitor drift by borough/offense, "
-            "formalize retraining cadence, and expose model age and validation coverage next "
-            "to forecasts."
+            "- Lifecycle limitations: no prediction interval, formal drift monitor, model-age "
+            "threshold, or general retraining cadence is established. The fixed historical/demo "
+            "dashboard is not operational guidance; it provides point estimates and does not "
+            "invent any of those capabilities or policies."
         ),
         "",
         "## Ethics Constraint",
@@ -1715,6 +1745,7 @@ def main() -> None:
     print("Building ML metrics payload.")
     payload = build_metrics_payload(
         con,
+        project_root=project_root,
         inputs=inputs,
         outputs=outputs,
         input_summary=input_summary,

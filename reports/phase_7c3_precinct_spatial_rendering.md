@@ -2,26 +2,30 @@
 
 ## Status
 
-The implementation is code-complete. The authoritative source, deterministic
-builder, Python and browser runtime contracts, and Forecast/Expected Change
-polygon rendering are in place, and every required automated verification
-command passes. The practical rerun completed desktop, tablet, mobile, state,
-tile-failure, precision, responsive, console, and network checks. The remaining
-blocker is native keyboard activation in the in-app browser. In a fresh
-1280 x 900 session, Forecast started on Precinct 75 with exactly 78 polygons
-and 78 native list buttons. The semantic Playwright key channel focused
-Precinct 14 for Enter and Precinct 40 for Space and rendered the expected
-2-pixel outline with 3-pixel offset, but both buttons remained
-`aria-pressed="false"`; the pressed list row and detail remained Precinct 75.
-CUA and DOM-CUA Enter/Space produced the same non-dispatch result. Tab and
-Shift+Tab also left focus on the Forecast mode button, and the advertised
-visibility capability did not present a visible webview. Expected Change
-repeated the same focused-but-not-activated result on Precinct 14 while its
-Precinct 75 detail and textual below-baseline semantics remained unchanged. No
-alternate browser surface, raw CDP, CLI automation, synthetic state mutation,
-or direct event dispatch was used. The milestone therefore remains
-verification-incomplete until that final keyboard check succeeds in an allowed
-browser session.
+The milestone is complete. The authoritative source, deterministic builder,
+Python and browser runtime contracts, and Forecast/Expected Change polygon
+rendering are in place, and every required automated verification command
+passes. The practical rerun completed desktop, tablet, mobile, state,
+tile-failure, precision, responsive, console, network, and native-keyboard
+checks.
+
+The closing native-keyboard acceptance used Chrome against the real local
+application. In Forecast, native Enter changed Precinct 14 from
+`aria-pressed="false"` to `"true"` and updated its detail. Tab then moved focus
+to Precinct 40; native Space selected Precinct 40, cleared the Precinct 14
+selection, and updated the detail. Expected Change passed the same Enter, Tab,
+and Space sequence with synchronized selection and detail.
+
+The earlier in-app browser attempt remains part of the audit history. In its
+fresh 1280 x 900 session, Forecast started on Precinct 75 with exactly 78
+polygons and 78 native list buttons. Its documented key channels focused
+Precinct 14 and Precinct 40 and rendered the expected 2-pixel outline with
+3-pixel offset, but did not dispatch activation; Tab and Shift+Tab also did not
+advance focus as expected. Expected Change repeated that focused-but-not-
+activated result. No raw protocol access, synthetic state mutation, or direct
+event dispatch was used. That historical tool-channel limitation is not the
+completion evidence and is superseded for acceptance by the genuine Chrome
+sequence above.
 
 ## Initial repository audit
 
@@ -48,7 +52,7 @@ Those artifacts were explicitly rejected. No event coordinate, complaint
 coordinate, inferred centroid, or fabricated geometry is used in Phase 7C.3.
 An alternate official feature-service endpoint was also rejected after it
 returned only 77 precincts and omitted precinct 123. The reproducible NYC Open
-Data GeoJSON export described below contains all 78 current features.
+Data GeoJSON export described below contains all 78 reviewed features.
 
 Pre-edit verification passed: all 78 Python contract tests, dashboard lint, all
 52 dashboard tests, the production build, and the production dependency audit.
@@ -56,10 +60,10 @@ Pre-edit verification passed: all 78 Python contract tests, dashboard lint, all
 ## Authoritative source and public-use assessment
 
 The selected source is the official New York City Department of City Planning
-(DCP) **Police Precincts**, edition 26B, data date May 2026, published through
-NYC Open Data. DCP identifies the dataset as quarterly. The source is current
-for this implementation and directly describes NYPD precinct administrative
-boundaries.
+(DCP) **Police Precincts**, edition 26B, data date May 2026, available through
+NYC Open Data. DCP identifies the dataset as quarterly. The reviewed source was
+selected for this implementation and directly describes NYPD precinct
+administrative boundaries.
 
 | Field | Verified value |
 | --- | --- |
@@ -102,7 +106,7 @@ demographic record.
 DCP documents the native dataset as **EPSG:2263**, NAD83 / New York Long Island
 (US survey feet). NYC Open Data's GeoJSON export supplies coordinates as
 **OGC:CRS84**, longitude then latitude. Repository processing performs no
-reprojection. The published artifact records both references, the axis order,
+reprojection. The browser-safe artifact records both references, the axis order,
 and the measured output bounds:
 
 `[-74.25559136, 40.49613399, -73.70000906, 40.91553278]`.
@@ -117,15 +121,15 @@ identity to `nypd-precinct:<source precinct label>`. The reconciliation is:
 
 - 78 Forecast keys;
 - 78 source precinct identifiers;
-- 78 published spatial features;
+- 78 browser-safe spatial features;
 - zero missing Forecast keys;
 - zero unexpected spatial keys;
 - zero duplicate or ambiguous identifiers; and
-- exactly one verified `MultiPolygon` per published Forecast precinct.
+- exactly one verified `MultiPolygon` per included Forecast precinct.
 
 No identifier is hardcoded from the milestone prompt. No precinct is renamed,
 merged, split, dropped, substituted, or invented, and no reviewed exception map
-was necessary. Features are published in deterministic lexical `locationKey`
+was necessary. Features are written in deterministic lexical `locationKey`
 order. The output contains 235 polygons, 236 rings, and 98,060 positions.
 
 ## Deterministic vendoring and processing
@@ -176,7 +180,7 @@ Forecast contract. Geometry validation requires:
 
 Forbidden-field checks reject event, complaint, person, victim, suspect,
 address, demographic, latitude/longitude, patrol, and enforcement-like
-properties. Source shape metrics are reviewed but are not published because
+properties. Source shape metrics are reviewed but are not included because
 the frontend does not need them.
 
 The compact browser contract contains only identity/version metadata,
@@ -205,7 +209,7 @@ Forecast Map contract and requires exact schema compatibility and all 78 keys.
 
 The official source declares a quarterly update frequency. The loader applies a
 documented 120-calendar-day refresh window from `portalRowsUpdatedAtUtc`; the
-current edition remains accepted through `2026-09-23T19:46:58Z` and then raises
+reviewed edition remains accepted through `2026-09-23T19:46:58Z` and then raises
 the distinct `stale` state unless a reviewed newer edition is vendored.
 
 Distinct errors are retained for missing artifact, network failure, stale
@@ -287,22 +291,29 @@ loaded page contained one `prefers-reduced-motion: reduce` rule and the
 responsive Vitest contract verifies its motion removal. No unsupported runtime
 emulation claim is made.
 
-The practical keyboard channel remains the only blocked release check. At
-1280 x 900, the exact native Forecast button named `Select precinct 14,
-232.6625 expected aggregate reported events` received semantic Playwright
+The first practical keyboard attempt exposed an in-app browser-channel
+limitation. At 1280 x 900, the exact native Forecast button named `Select
+precinct 14, 232.6625 expected aggregate reported events` received semantic
 Enter focus, and `Select precinct 40, 216.2125 expected aggregate reported
-events` received semantic Playwright Space focus. Each displayed the solid
-2-pixel focus outline with 3-pixel offset, but each remained
-`aria-pressed="false"`; the selected row, Precinct 75 detail, and shared polygon
-selection did not change. CUA and DOM-CUA Enter/Space also left Precinct 75
-selected. Semantic Playwright and CUA Tab/Shift+Tab attempts from the focused
-Forecast mode button did not advance focus. Expected Change likewise focused
-the exact native `Select precinct 14, below baseline, -23.0875` button on
-Enter, but retained the selected `Select precinct 75, below baseline,
--23.0375` row and Precinct 75 detail. The in-app browser's supported visibility
-request still reported false. Native-button keyboard activation continues to
-pass the Vitest integration test; this run does not substitute that automated
-evidence for the missing practical activation.
+events` received semantic Space focus. Each displayed the solid 2-pixel focus
+outline with 3-pixel offset, but each remained `aria-pressed="false"`; the
+selected row, Precinct 75 detail, and shared polygon selection did not change.
+CUA and DOM-CUA Enter/Space also left Precinct 75 selected. Semantic and CUA
+Tab/Shift+Tab attempts from the focused Forecast mode button did not advance
+focus. Expected Change likewise focused the exact native `Select precinct 14,
+below baseline, -23.0875` button on Enter, but retained the selected `Select
+precinct 75, below baseline, -23.0375` row and Precinct 75 detail. This attempt
+is retained as historical evidence only.
+
+The closing Chrome acceptance then exercised the real local application with
+native keyboard input. Forecast Enter selected Precinct 14 and changed its
+`aria-pressed` state from false to true; the detail updated to Precinct 14. Tab
+moved focus to Precinct 40. Space selected Precinct 40, cleared Precinct 14,
+and updated the detail to Precinct 40. Expected Change passed the same
+Enter-to-Precinct-14, Tab-to-Precinct-40, Space-to-select-Precinct-40 sequence.
+This genuine practical result agrees with the Vitest native-button regression
+coverage and completes the keyboard acceptance without synthetic dispatch or
+state mutation.
 
 CARTO raster tiles are an optional backdrop. A tile failure produces a visible
 notice but does not remove official vector polygons, filters, legends, the
@@ -334,7 +345,7 @@ states.
 
 Both the provenance record and output contract assert that the source is
 administrative boundary geometry suitable for aggregate public visualization.
-The builder and runtime contract enforce that the published artifact contains:
+The builder and runtime contract enforce that the browser-safe artifact contains:
 
 - no complaint or event records;
 - no event-level coordinates or inferred centroids;
@@ -450,13 +461,12 @@ errors, including no React key/state-update, Leaflet, or accessibility warning.
 The state and tile harnesses were removed before final verification, and the
 temporary Vite server was stopped.
 
-Still pending before milestone completion is one successful practical native
-keyboard activation through an allowed in-app browser session. At 1280 x 900,
-the current browser focused Precinct 14 for Enter and Precinct 40 for Space but
-left `aria-pressed`, the Precinct 75 detail, and shared polygon selection
-unchanged. Expected Change repeated the Precinct 14 Enter attempt with the same
-result. The Playwright, CUA, and DOM-CUA key channels were tried; policy was not
-bypassed through another surface.
+The final Chrome run completed practical native-keyboard acceptance. Forecast
+Enter selected Precinct 14, Tab focused Precinct 40, and Space selected Precinct
+40; `aria-pressed`, detail, list, and polygon selection all remained aligned.
+Expected Change passed the same sequence. The earlier in-app channel's
+focused-but-not-activated result is preserved above as a historical tool
+limitation, not as the milestone's final state.
 
 ## Artifact and production bundle impact
 
@@ -464,10 +474,10 @@ bypassed through another surface.
 | --- | ---: | ---: |
 | Vendored official GeoJSON | 3,842,773 bytes | 1,388,135 bytes |
 | Processed/public spatial JSON | 2,643,692 bytes | 771,936 bytes |
-| Current lazy Map JavaScript | 229.04 kB | 64.78 kB |
+| Final lazy Map JavaScript | 229.04 kB | 64.78 kB |
 | Main JavaScript | 226.25 kB | 71.36 kB |
 | Overview JavaScript | 404.27 kB | 113.51 kB |
-| Current Map CSS chunk | 15.09 kB | 6.36 kB |
+| Final Map CSS chunk | 15.09 kB | 6.36 kB |
 | Main CSS | 48.66 kB | 9.21 kB |
 
 Compared with Phase 7C.2, the lazy Map JavaScript increased from 188.47 kB /
@@ -502,11 +512,11 @@ These figures are from the final successful production rebuild.
 - Administrative polygons communicate aggregate precinct membership only; they
   do not locate a future event or indicate risk, danger, patrol priority, or
   enforcement need.
-- A successful practical native-button Enter/Space activation in an allowed
-  browser session remains before the milestone can be marked complete. At
-  1280 x 900, the current in-app browser focused the exact Precinct 14 and
-  Precinct 40 targets and showed visible focus, but Playwright, CUA, and DOM-CUA
-  did not dispatch activation; no alternate surface was used.
+- An earlier in-app browser channel could focus the exact Precinct 14 and
+  Precinct 40 targets and show visible focus but could not dispatch activation.
+  Chrome subsequently completed genuine Enter/Tab/Space selection on the real
+  local application in both Forecast and Expected Change; the earlier result is
+  a retained tool limitation, not an open product limitation.
 
 No model, API, authentication, deployment, real-time inference, event-level
 geography, commit, or push is part of this work.

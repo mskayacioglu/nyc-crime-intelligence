@@ -88,43 +88,10 @@ def secret_literals(text: str) -> set[str]:
     return {match.group(0) for pattern in patterns for match in pattern.finditer(text)}
 
 
-# These exact literals are malicious test fixtures proving that frontend and
-# contract error handling does not leak local details. The allowlist is by file
-# and literal; no test file is skipped wholesale.
-_LOCAL_FIXTURE_ROOT = "/" + "Users/example/private/"
-ABSOLUTE_PATH_FIXTURES: dict[PurePosixPath, set[str]] = {
-    PurePosixPath("dashboard/src/components/GovernanceView.test.tsx"): {
-        _LOCAL_FIXTURE_ROOT + "map.json",
-        _LOCAL_FIXTURE_ROOT + "spatial.json",
-    },
-    PurePosixPath("dashboard/src/data/decodeGovernance.test.ts"): {
-        _LOCAL_FIXTURE_ROOT + "model_manifest.json",
-        _LOCAL_FIXTURE_ROOT + "precinct-spatial-reference.json",
-        _LOCAL_FIXTURE_ROOT + "source.json",
-    },
-    PurePosixPath("dashboard/src/data/loadForecastMap.test.ts"): {
-        _LOCAL_FIXTURE_ROOT + "forecast.parquet",
-        _LOCAL_FIXTURE_ROOT + "baseline.parquet",
-        _LOCAL_FIXTURE_ROOT + "manifest.json",
-        _LOCAL_FIXTURE_ROOT + "metrics.json",
-    },
-    PurePosixPath("tests/test_dashboard_forecast_map_contract.py"): {
-        _LOCAL_FIXTURE_ROOT + "forecast.parquet",
-        _LOCAL_FIXTURE_ROOT + "baseline.parquet",
-        _LOCAL_FIXTURE_ROOT + "manifest.json",
-        _LOCAL_FIXTURE_ROOT + "model.json",
-        _LOCAL_FIXTURE_ROOT + "metrics.json",
-    },
-}
-_TOKEN_SECRET_FIXTURE = "token=" + "secret"
-SECRET_FIXTURES: dict[PurePosixPath, set[str]] = {
-    PurePosixPath("dashboard/src/components/GovernanceView.test.tsx"): {
-        _TOKEN_SECRET_FIXTURE
-    },
-    PurePosixPath("dashboard/src/data/decodeGovernance.test.ts"): {
-        _TOKEN_SECRET_FIXTURE
-    },
-}
+# Negative fixtures assemble local paths and credential-like strings at runtime,
+# so the tracked-source scan needs no exceptions and still exercises sanitizers.
+ABSOLUTE_PATH_FIXTURES: dict[PurePosixPath, set[str]] = {}
+SECRET_FIXTURES: dict[PurePosixPath, set[str]] = {}
 
 
 UNSAFE_NOTEBOOK_SOURCE_PATTERNS: dict[str, re.Pattern[str]] = {

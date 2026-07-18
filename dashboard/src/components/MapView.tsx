@@ -654,7 +654,7 @@ const SPATIAL_STATE_COPY: Record<
   },
   'incomplete-coverage': {
     title: 'Precinct geography incomplete',
-    body: 'The spatial artifact does not cover every published Forecast precinct. Partial geography is not drawn.',
+    body: 'The spatial artifact does not cover every precinct included in the Forecast contract. Partial geography is not drawn.',
   },
   'location-key-mismatch': {
     title: 'Precinct geography key mismatch',

@@ -221,7 +221,7 @@ function readinessItems(
       status,
       reason:
         status === 'available'
-          ? `${formatInteger(contract.forecast.summary.rowCount)} published rows for the fixed week of ${formatDate(contract.dimensions.forecastWeeks[0])}; not a live or rolling operational forecast.`
+          ? `${formatInteger(contract.forecast.summary.rowCount)} rows included in the committed browser-safe artifact for the fixed week of ${formatDate(contract.dimensions.forecastWeeks[0])}; not a live or rolling operational forecast.`
           : status === 'empty'
             ? 'The valid forecast artifact is empty; no total is inferred as zero.'
             : `The forecast artifact is ${STATUS_LABEL[status].toLocaleLowerCase('en-US')}; no prediction value is shown.`,
@@ -247,7 +247,7 @@ function readinessItems(
       status: changeStatus,
       reason:
         changeStatus === 'available' || changeStatus === 'partial'
-          ? `${formatInteger(summary.expectedChangeCountAvailableRowCount)} of ${formatInteger(summary.publishedRowCount)} rows have a count change; ${formatInteger(summary.expectedChangePctAvailableRowCount)} have a percentage change. ${formatInteger(summary.zeroBaselineRowCount)} baselines are valid zero values, so their percentage change remains unavailable.`
+          ? `${formatInteger(summary.expectedChangeCountAvailableRowCount)} of ${formatInteger(summary.publishedRowCount)} included rows have a count change; ${formatInteger(summary.expectedChangePctAvailableRowCount)} have a percentage change. ${formatInteger(summary.zeroBaselineRowCount)} baselines are valid zero values, so their percentage change remains unavailable.`
           : changeStatus === 'empty'
             ? 'The valid forecast artifact contains no rows, so Expected Change is empty rather than zero or unavailable.'
             : 'Expected Change is unavailable because its validated baseline or forecast context is unavailable; missing history is not converted to zero.',
@@ -294,7 +294,7 @@ function GovernanceInvalidState({ status }: { status: 'invalid' | 'incompatible'
         <div>
           <h2>Governance metadata is {incompatible ? 'incompatible' : 'invalid'}</h2>
           <p>
-            The published coverage, quality, identity, or responsible-use fields {reason}{' '}
+            The committed browser-safe coverage, quality, identity, or responsible-use fields {reason}{' '}
             No malformed value is presented as zero or available. Reload dashboard data
             to retry.
           </p>
@@ -310,7 +310,7 @@ function CoverageSection({ core }: { core: GovernanceOverviewProjection }) {
       <div className="governance-panel__heading">
         <CalendarRange aria-hidden="true" size={19} />
         <div>
-          <p className="section-kicker">Published observation scope</p>
+          <p className="section-kicker">Committed browser-safe observation scope</p>
           <h3 id="governance-coverage-title">Data coverage</h3>
         </div>
       </div>
@@ -343,7 +343,7 @@ function CoverageSection({ core }: { core: GovernanceOverviewProjection }) {
         <div>
           <dt>Included aggregate-safe rows</dt>
           <dd>{formatInteger(core.aggregateSafeEventCount)}</dd>
-          <small>Included in published aggregate counts</small>
+          <small>Included in committed browser-safe aggregate counts</small>
         </div>
         <div>
           <dt>Excluded rows</dt>
@@ -429,7 +429,7 @@ function ModelSection({ state }: { state: ArtifactState }) {
       <section className="governance-panel governance-panel--loading" aria-busy="true">
         <div className="governance-loading">
           <Clock3 aria-hidden="true" size={18} />
-          <div><strong>Checking model lifecycle</strong><span>Validating the published Forecast contract.</span></div>
+          <div><strong>Checking model lifecycle</strong><span>Validating the committed Forecast contract.</span></div>
         </div>
       </section>
     )
@@ -478,7 +478,7 @@ function ModelSection({ state }: { state: ArtifactState }) {
         <div>
           <dt>Model</dt>
           <dd>DuckDB lag ensemble regressor</dd>
-          <small className="governance-long-value">Published identity: {model.name}</small>
+          <small className="governance-long-value">Contract identity: {model.name}</small>
         </div>
         <div><dt>Model version</dt><dd>{model.version}</dd></div>
         <div><dt>Artifact version</dt><dd>{model.artifactVersion}</dd></div>
@@ -559,7 +559,7 @@ function ReadinessSection({
       <section className="governance-panel governance-panel--loading" aria-busy="true">
         <div className="governance-loading" role="status">
           <Clock3 aria-hidden="true" size={18} />
-          <div><strong>Checking analytical readiness</strong><span>Validating published artifact status and alignment.</span></div>
+          <div><strong>Checking analytical readiness</strong><span>Validating committed artifact status and alignment.</span></div>
         </div>
       </section>
     )
@@ -693,7 +693,7 @@ function ProvenanceDisclosure({
             <small>Current viewer clock used only for the documented spatial TTL; never a data timestamp</small>
           </div>
           <div>
-            <dt>Published model identifier</dt>
+            <dt>Model identifier</dt>
             <dd>{forecast?.model.name ?? 'Unavailable'}</dd>
             <small>Allowlisted model identity; no raw manifest is exposed</small>
           </div>
@@ -770,18 +770,18 @@ export default function GovernanceView({
     <main id="main-content" className="main-content governance-view">
       <section className="governance-introduction" aria-labelledby="governance-title">
         <div>
-          <p className="section-kicker">Published artifact accountability</p>
+          <p className="section-kicker">Committed artifact accountability</p>
           <h2 id="governance-title">Governance</h2>
           <p>
             Coverage, data-quality warnings, model lifecycle, analytical readiness, and
-            responsible-use limits for the published aggregate artifacts.
+            responsible-use limits for the committed browser-safe aggregate artifacts.
           </p>
         </div>
         <div className="governance-scope" role="note">
           <ShieldCheck aria-hidden="true" size={18} />
           <p>
             <strong>Dataset- and model-wide scope.</strong> These values describe the
-            underlying published artifacts, not the current borough, precinct, offense,
+            underlying committed browser-safe artifacts, not the current borough, precinct, offense,
             law-category, or date-filtered slice. Your global filters are preserved while
             this view is open.
           </p>

@@ -1826,7 +1826,9 @@ def build_dashboard_forecast_map(
             "geometryIncluded": False,
             "coverage": (
                 "All known precinct labels that pass the canonical borough mapping have "
-                "an opaque key; no complete verified precinct geometry or centroid source exists."
+                "an opaque key. This key-only contract does not embed the separate verified "
+                "Phase 7C.3 precinct geometry; runtime reconciliation validates its complete "
+                "coverage against that dedicated contract."
             ),
         },
         "methodology": {
@@ -1871,7 +1873,11 @@ def build_dashboard_forecast_map(
             ),
             "UNKNOWN offense is an explicit aggregate classification label, not a fabricated category.",
             "Unmappable or noncanonical borough/precinct source rows are withheld and quantified.",
-            "No complete verified precinct coordinate, centroid, boundary, or geometry reference exists.",
+            (
+                "This key-only contract embeds no coordinate, centroid, boundary, or geometry; "
+                "the separate verified Phase 7C.3 spatial-reference contract supplies the "
+                "complete administrative precinct boundaries."
+            ),
             "Reporting, classification, delay, revision, and model error affect these estimates.",
             "Forecasts are not crime certainty, neighborhood-danger scores, or grounds for action.",
         ],

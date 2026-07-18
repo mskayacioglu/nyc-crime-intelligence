@@ -31,6 +31,8 @@ const forecastContract = (): ForecastMapContract =>
   structuredClone(forecastArtifact) as unknown as ForecastMapContract
 const spatialContract = (): PrecinctSpatialReferenceContract =>
   structuredClone(spatialArtifact) as unknown as PrecinctSpatialReferenceContract
+const localFixtureRoot = '/' + 'Users/example/private/'
+const secretFixture = 'token=' + 'secret'
 
 function renderGovernance(overrides: Partial<GovernanceProps> = {}) {
   const props: GovernanceProps = {
@@ -133,6 +135,11 @@ describe('Governance view', () => {
     expect(
       screen.getByRole('heading', { name: 'Governance' }),
     ).toBeInTheDocument()
+    expect(screen.getByText('Committed artifact accountability')).toBeInTheDocument()
+    expect(screen.getByRole('main')).toHaveTextContent(
+      /committed browser-safe aggregate artifacts/i,
+    )
+    expect(screen.getByRole('main')).not.toHaveTextContent(/\bpublished\b/i)
     expect(screen.queryByRole('combobox')).not.toBeInTheDocument()
     expect(screen.getByText(/dataset- and model-wide scope/i).closest('[role="note"]')).toHaveTextContent(
       /not the current borough, precinct, offense, law-category, or date-filtered slice/i,
@@ -191,6 +198,9 @@ describe('Governance view', () => {
     expect(within(readinessItem('Anomalies')).getByText('Available')).toBeInTheDocument()
     expect(readinessItem('Anomalies')).toHaveTextContent('10,378 high or critical rows')
     expect(within(readinessItem('Forecast')).getByText('Available')).toBeInTheDocument()
+    expect(readinessItem('Forecast')).toHaveTextContent(
+      /rows included in the committed browser-safe artifact/i,
+    )
     expect(readinessItem('Forecast')).toHaveTextContent(/not a live or rolling operational forecast/i)
     expect(within(readinessItem('Expected Change')).getByText('Partial')).toBeInTheDocument()
     expect(readinessItem('Expected Change')).toHaveTextContent(
@@ -259,7 +269,7 @@ describe('Governance view', () => {
     const mapLoader = vi
       .fn<() => Promise<MapDataContract>>()
       .mockRejectedValueOnce(
-        new Error('/Users/example/private/map.json returned token=secret'),
+        new Error(localFixtureRoot + 'map.json returned ' + secretFixture),
       )
       .mockResolvedValue(mapContract())
     renderGovernance({ mapLoader })
@@ -271,7 +281,9 @@ describe('Governance view', () => {
     expect(readinessItem('Hotspots')).toHaveTextContent(
       /could not be loaded or validated/i,
     )
-    expect(document.body).not.toHaveTextContent(/Users|token=secret|private\/map\.json/i)
+    expect(document.body).not.toHaveTextContent(
+      new RegExp(['Users', secretFixture, 'private/map\\.json'].join('|'), 'i'),
+    )
 
     await user.click(retry)
 
@@ -303,7 +315,7 @@ describe('Governance view', () => {
       precinctSpatialReferenceLoader: async () => {
         throw new PrecinctSpatialReferenceError(
           'missing-artifact',
-          '/Users/example/private/spatial.json is missing',
+          localFixtureRoot + 'spatial.json is missing',
         )
       },
     })

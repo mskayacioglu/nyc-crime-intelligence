@@ -154,12 +154,12 @@ These borough/offense groups have the largest average absolute historical residu
 This section records the analytical-layer review before dashboard integration.
 Anomalies are now integrated with the complete list/detail experience and the
 expected-count, residual, prior-volume, lifecycle, and limitation context
-described in the [current Anomalies report](dashboard_anomalies_view.md).
+described in the [delivered Anomalies report](dashboard_anomalies_view.md).
 
 - The layer identifies unusually high aggregate counts; it does not explain causality.
 - The latest source week may be partial depending on the upstream data extract.
 - Reported complaint counts can be affected by reporting delay, policy changes, classification changes, and data revisions.
-- The current thresholds are conservative defaults and should be monitored for alert volume by borough and offense type.
+- The reviewed thresholds are conservative defaults and should be monitored for alert volume by borough and offense type.
 - No uncertainty intervals, holidays, special events, spatial spillover terms, or reporting-lag corrections are included yet.
 - Dashboard surfaces should show the expected count, residual, prior volume gate, and model age next to every anomaly.
 

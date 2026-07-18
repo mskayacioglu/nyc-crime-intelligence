@@ -3,7 +3,7 @@
 ## Scope
 
 Phase 7B extends the Phase 7A dashboard with a real **Map & hotspots** view and
-navigation from Overview. Overview remains the first operational screen and its
+navigation from Overview. Overview remains the first analytical screen and its
 weekly observed-count contract is unchanged. This phase does not implement
 Trends, Forecast, Governance, authentication, deployment, a standalone API,
 real-time ingestion, person-level scoring, or recommendations about patrol or
@@ -28,7 +28,7 @@ This separation preserves the efficient Phase 7A weekly cube and makes the
 different time semantics explicit: Overview represents selectable historical
 weeks; Map represents one validated hotspot scoring snapshot.
 
-## Inspected input schemas and current data
+## Inspected input schemas and reviewed data
 
 The inputs were inspected directly with DuckDB before the Map contract was
 designed.
@@ -50,7 +50,7 @@ The actual parquet schema has 40 fields. Its relevant groups are:
 - Analytical signals: component scores, `composite_score`, volume/hotspot flags,
   and `hotspot_severity`.
 
-The current source contains 396 unique logical records on one scoring date,
+The reviewed source contains 396 unique logical records on one scoring date,
 2025-12-30:
 
 | Grain | Rows | Borough labels | Precincts | Severity distribution |
@@ -59,7 +59,7 @@ The current source contains 396 unique logical records on one scoring date,
 | Precinct | 36 | 4 | 27 | 20 low, 14 medium, 2 high, 0 critical |
 
 Across both grains the source contains 21 offense types, all three law
-categories, and all four severity levels. All 396 current map coordinates are
+categories, and all four severity levels. All 396 reviewed map coordinates are
 non-null and finite, and all 396 inspected logical keys are unique. The source
 reports 30-day recent windows and 365-day baselines. Composite scores span
 42.2076–83.2434 for precinct records and 43.2852–100 for grid records.
@@ -73,7 +73,7 @@ tie-breaking in the Phase 6 pipeline.
 
 ### `hotspot_metrics.json`
 
-The current metrics artifact identifies the Phase 6B hotspot method, the same
+The reviewed metrics artifact identifies the Phase 6B hotspot method, the same
 2025-12-30 scoring date, 30-day recent and 365-day baseline windows, a
 0.01-degree grid, scoring thresholds, source/output columns, record and severity
 counts, and deterministic run metadata. Map treats it as optional explanatory
@@ -87,7 +87,7 @@ complaint identifier that is never selected for the frontend contract. The Map
 builder consults this source only through rows satisfying
 `is_clean_event_for_aggregate = true` to establish aggregate-safe coverage and
 freshness. The inspected safe population is 10,049,687 rows spanning 2006-01-01
-through 2025-12-31. The current hotspot snapshot is therefore one safe-data day
+through 2025-12-31. The reviewed hotspot snapshot is therefore one safe-data day
 behind the maximum and is eligible to display.
 
 The Overview weekly aggregate remains 1,761,447 rows reconciling to the same
@@ -168,7 +168,7 @@ severityIndex
 coordinateCoveragePct
 ```
 
-Common values such as scoring date, snapshot age, current maximum age, recent
+Common values such as scoring date, snapshot age, allowed maximum age, recent
 window, baseline window, grid size, and counts are stored once in
 `hotspots.summary`. `expectedRecentCount` and `liftPct` may be null when the
 source cannot defend them; the interface omits those metrics rather than
@@ -178,10 +178,10 @@ contract compact and byte-stable for identical inputs.
 ## Date and filter semantics
 
 Overview continues to use inclusive Monday-based `week_start` filters. Map does
-not rescore hotspots for an arbitrary historical range. Its fixed current
+not rescore hotspots for an arbitrary historical range. Its fixed reviewed
 snapshot is shown only when the selected range includes the latest complete
 Overview week. Moving the end date into history produces a neutral explanation
-that the current snapshot is incompatible with the selection; it does not
+that the reviewed snapshot is incompatible with the selection; it does not
 present a zero count.
 
 The Map shares the Overview borough, precinct, offense-type, law-category, date,
@@ -196,14 +196,14 @@ and provenance, but it does not replace the global control mapping:
 - A selected precinct matches precinct-grain records only. Grid rows have no
   precinct assignment and are explicitly omitted from precinct-filtered results.
 - The layer control supports both grains, precinct only, and grid only whenever
-  the current filters support them.
-- Reset restores the Phase 7A default scope and current-date window.
+  the selected filters support them.
+- Reset restores the Phase 7A default scope and date window.
 - Stable dimensions are retained while filters change so the map and detail
   region do not collapse or jump.
 - Map and Overview must report the same aggregate-safe end date. An older Map
   contract is neutrally withheld with a refresh instruction; a newer Map
   contract is incompatible with the older Overview context. Neither mismatch is
-  shown as a current snapshot.
+  shown as a compatible snapshot.
 
 ## Hotspot grain semantics
 
@@ -233,14 +233,14 @@ Availability is explicit and rows are never silently coerced:
 | Duplicate logical hotspot key or rank | `invalid`; rows withheld |
 | More than one scoring date | `invalid`; mixed snapshots are not merged |
 | Snapshot after safe event maximum | `invalid`; future-dated rows withheld |
-| Snapshot zero or one safe-data day old | Eligible as current |
+| Snapshot zero or one safe-data day old | Eligible under the documented freshness rule |
 | Snapshot more than one safe-data day old | `stale`; rows withheld with reason |
 
 Even when the data-build status is `available`, the frontend performs the
 additional Map/Overview safe-end-date compatibility check described above.
 It also rejects an available snapshot when its declared age contradicts the
 calendar-day difference between `scoringEndDate` and the aggregate-safe end
-date, preventing stale data from being mislabeled as current.
+date, preventing stale data from being mislabeled as compatible.
 
 Logical-key uniqueness includes grain, aggregate location context, borough,
 precinct where applicable, offense, law category, and snapshot identity. Sorted
@@ -257,7 +257,7 @@ clear title and one short action or explanation while preserving necessary
 historical, stale, missing, invalid, mismatch, empty, loading, and error
 distinctions.
 
-Overview remains the first operational view. Compact metrics establish scope,
+Overview remains the first analytical view. Compact metrics establish scope,
 but the weekly trend and geographic/category comparisons carry the strongest
 visual hierarchy. Map makes the geographic surface dominant and places the
 selected aggregate signal and keyboard-accessible hotspot list in adjacent bounded
@@ -281,7 +281,7 @@ dark-steel structural frames, fine edge illumination, and subtle grid/scan-line
 texture. Gray-blue distinguishes historical and reference values; amber is
 reserved for elevated/high conditions and restrained red for critical
 conditions. Transparency, blur, reflection, and depth remain low-intensity so
-the screen reads as one continuous operational environment rather than a grid
+the screen reads as one continuous analytical environment rather than a grid
 of conventional cards.
 
 The CARTO dark basemap now retains moderate luminance with controlled
@@ -330,15 +330,15 @@ Leaflet stay behind the existing lazy-loading boundary.
 - Loading, error, source-missing, valid-empty, stale, and historical-selection
   states have explicit non-map alternatives.
 
-## Current integration note
+## Later integration note
 
 This report is the historical Phase 7B snapshot. Its statements that the map
 lacks Forecast, Expected Change, and verified precinct polygons describe that
-milestone, not the current product. Those capabilities were added later; see
+milestone, not the completed local product. Those capabilities were added later; see
 the [Phase 7C.3 spatial report](phase_7c3_precinct_spatial_rendering.md), the
 [Anomalies report](dashboard_anomalies_view.md), and the
-[Governance report](dashboard_governance_view.md) for current behavior and
-remaining verification limits.
+[Governance report](dashboard_governance_view.md) for delivered behavior and
+completion evidence.
 
 ## Data-quality limitations
 
@@ -352,7 +352,7 @@ remaining verification limits.
   simplify a cell that intersects more than one administrative area.
 - Phase 7B includes points/aggregate shapes, not authoritative precinct boundary
   polygons.
-- The current map has no anomaly overlay, forecast layer, uncertainty interval,
+- The Phase 7B map has no anomaly overlay, forecast layer, uncertainty interval,
   or causal explanation for a score.
 - A fixed snapshot cannot answer historical-map questions. Historical date
   selection is therefore withheld rather than approximated.
@@ -362,7 +362,7 @@ remaining verification limits.
 
 ## Ethics and privacy safeguards
 
-Only aggregate-safe analytical records are published. Event-level data is
+Only aggregate-safe analytical records are included. Event-level data is
 consulted only with `is_clean_event_for_aggregate = true` for safe coverage and
 freshness checks. The frontend outputs exclude complaint IDs, source row IDs,
 event records, names, race, sex, age groups, victim demographics, and suspect
@@ -388,7 +388,7 @@ scoring, patrol recommendations, and enforcement recommendations.
 
 ### Automated verification
 
-- The real Map build published 396 rows with `available` status.
+- The real Map build wrote 396 rows with `available` status.
 - Canonical and frontend outputs are byte-identical at 46,835 bytes, with
   SHA-256 `669ce7600094056c697cd751eeeb9305768e51ae0570435ac7c05ea14f7bd7ef`.
 - Focused Map data-contract tests passed 12/12.

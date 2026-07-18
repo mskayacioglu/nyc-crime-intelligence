@@ -23,8 +23,9 @@ The initial repository audit found the requested state exactly:
 - no listener on port 4173; and
 - no applicable repository `AGENTS.md` outside dependency-owned content.
 
-No initial-state discrepancy was present. Existing work and the separate Phase
-7C.3 verification-incomplete browser blocker were preserved.
+No initial-state discrepancy was present. Existing work and the then-open
+Phase 7C.3 practical browser check were preserved; that later milestone is now
+complete with genuine Chrome native-keyboard evidence.
 
 ## Authoritative data chain
 
@@ -56,13 +57,13 @@ segment-weeks over the evaluated 2006-03-27 through 2025-12-22 range:
 | High | 7,301 |
 | Critical | 3,077 |
 
-The browser publication intentionally contains the 10,378 high and critical
+The browser-safe projection intentionally contains the 10,378 high and critical
 rows only. It does not recalculate or relabel lower-severity records in the
 frontend. The default inclusive complete-week scope, 2024-12-30 through
-2025-12-22, contains 645 published rows: 175 critical and 470 high.
+2025-12-22, contains 645 browser rows: 175 critical and 470 high.
 
 The source can carry its established literal `UNKNOWN` aggregate dimension
-label. The current high/critical publication contains eight rows with an
+label. The reviewed high/critical projection contains eight rows with an
 unknown borough label and five with an unknown offense label. The interface
 renders those labels as `Unknown / not reported`; it does not infer, remap, or
 fabricate the missing dimension.
@@ -108,7 +109,7 @@ These semantics distinguish the screen from all adjacent products:
 | Experience | Time and analytical meaning |
 | --- | --- |
 | Anomalies | Already-observed weekly aggregate increase against a prior-only or safe historical-week expectation |
-| Hotspots | Current fixed-snapshot aggregate concentration over documented recent and baseline windows |
+| Hotspots | Reviewed fixed-snapshot aggregate concentration over documented recent and baseline windows |
 | Forecast | Future one-week model point estimate |
 | Expected change | Future Forecast point estimate minus its trailing historical baseline |
 
@@ -117,7 +118,7 @@ forecast model provides one.
 
 ## Build and runtime contract hardening
 
-`src/analytics/build_dashboard_overview.py` now fails closed before publishing
+`src/analytics/build_dashboard_overview.py` now fails closed before writing
 anomalies. It verifies:
 
 - exact required parquet source types and nonblank logical key dimensions;
@@ -140,7 +141,7 @@ missing inputs remain `missing`. Rows and aggregate counts are withheld for
 every unavailable state. Staleness is based on the documented source horizon,
 not the viewer's wall clock.
 
-An available anomaly section publishes exact compact row columns and a summary
+An available anomaly section contains exact compact row columns and a summary
 containing row count, high count, critical count, `isEmpty`, and
 `scoringEndWeek`. Regenerating Overview through the established builder updated
 the existing canonical and public Overview JSON; no parallel data contract was
@@ -152,7 +153,7 @@ only ethics flags, exact row width and columns, valid unique dimensions and
 indexes, known expectation sources, high/critical severities only, Monday
 weeks, finite values, arithmetic reconciliation, unique stable identities,
 deterministic source order, exact summary shape and counts, and aligned scoring
-horizon. The browser reconciles independently rounded four-decimal publication
+horizon. The browser reconciles independently rounded four-decimal projection
 values within `0.0001`, the strict tolerance supported by that encoding. It
 preserves a valid zero historical reference and marks only the relative
 percentage unavailable when division by that zero would be undefined.
@@ -172,7 +173,7 @@ The screen provides:
   distinction from Hotspots, Forecast, Expected change, and individual
   behavior;
 - filtered result, critical, and high counters;
-- a bounded complete ordered list of every matching published record;
+- a bounded complete ordered list of every matching browser record;
 - a synchronized detail showing the week, borough and precinct, offense, law
   category, observed aggregate value, named expectation source and value,
   signed deviation, relative deviation when defined, direction text, anomaly
@@ -208,10 +209,10 @@ For the default real data, the first row is:
 The established shared filters apply inclusively to anomaly rows:
 
 - start and end dates select Monday-based observed weekly buckets;
-- borough matches the published aggregate borough;
-- precinct matches the published aggregate precinct;
+- borough matches the aggregate borough in the contract;
+- precinct matches the aggregate precinct in the contract;
 - offense matches offense type; and
-- law category matches the published law category.
+- law category matches the law category in the contract.
 
 Borough changes reuse the Overview borough-to-precinct index and clear an
 incompatible precinct. Reset restores 2024-12-30 through 2025-12-22 and all
@@ -243,13 +244,14 @@ No custom keydown, roving-tabindex, or synthetic activation handler was added.
 Native button Enter and Space behavior, focus retention, filter fallback, and
 list/detail/accessibility synchronization pass in automated browser-DOM tests.
 
-The permitted in-app browser focused the exact native result and displayed the
-visible focus ring, but it again did not deliver genuine Tab/Enter/Space
-activation events to the application. Another browser surface, script-dispatched
-events, JavaScript `focus()`/`click()`, or direct state mutation was not used as
-a substitute. This is recorded as a browser-channel limitation, with automated
-native-control regression coverage; it does not modify or close the separate
-Phase 7C.3 keyboard blocker.
+An earlier in-app browser channel focused the exact native result and displayed
+the visible focus ring, but did not deliver genuine Tab/Enter/Space activation
+events to the application. Script-dispatched events, JavaScript
+`focus()`/`click()`, and direct state mutation were not used as substitutes.
+This remains historical browser-channel evidence with automated native-control
+regression coverage. Phase 7C.3 later completed genuine Chrome Enter/Tab/Space
+acceptance on the predictive native-button path; no separate Anomalies manual
+gate remains in the local completion criteria.
 
 ## Explicit state behavior
 
@@ -362,23 +364,24 @@ practical verification.
 - Anomalies identify unusual aggregate increases; they do not explain cause.
 - Reported complaint totals are affected by reporting delays, revisions,
   classification changes, and changes in reporting behavior.
-- The current method does not model holidays, special events, reporting lag, or
+- The reviewed method does not model holidays, special events, reporting lag, or
   spatial spillover and does not provide an uncertainty interval.
 - A safe historical backtest reference exists only for the historical weeks
   represented by the established model output; otherwise the prior-only
   13-week mean is used and labeled.
-- The screen publishes only high and critical signals. It is not a complete
+- The screen contains only high and critical signals. It is not a complete
   browser copy of all low/medium analytical rows.
 - Analytical priority is not policing priority, offense severity, a causal
   finding, or justification for patrol, investigation, enforcement, or action
   against a person or community.
 - Aggregate area labels can be literal `UNKNOWN` in the source and are displayed
   as `Unknown / not reported` rather than inferred.
-- The in-app browser's genuine Tab/Enter/Space delivery remains unavailable for
-  practical activation verification. Native semantics and automated coverage
-  are retained without application-specific compensation.
+- The earlier in-app browser channel did not deliver Tab/Enter/Space for this
+  view. Native semantics and automated coverage are retained without
+  application-specific compensation; the completed Phase 7C.3 Chrome acceptance
+  separately verifies genuine native input on the predictive list.
 
-Only aggregate-safe area/time/category signals are published. Complaint IDs,
+Only aggregate-safe area/time/category signals are included. Complaint IDs,
 records, names, exact addresses, event-level coordinates, person attributes,
 victim or suspect demographics, person-level scores, and recommendations are
 absent.

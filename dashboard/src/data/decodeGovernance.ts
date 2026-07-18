@@ -621,7 +621,7 @@ export function governanceFailure(error: unknown, source: 'map' | 'forecast' | '
   if (error instanceof GovernanceContractError) {
     return {
       status: error.status,
-      reason: `The ${source} contract did not reconcile with the published Governance scope.`,
+      reason: `The ${source} contract did not reconcile with the committed browser-safe Governance scope.`,
     }
   }
   if (error instanceof PrecinctSpatialReferenceError) {

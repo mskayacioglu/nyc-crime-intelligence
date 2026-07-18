@@ -84,7 +84,7 @@ missingness and cardinality measures are retained.
 This exploratory table compares parsed calendar dates only, so
 `to_date_before_from_date` is 77. The production cleaning rule prefers full
 start/end timestamps when both times parse and falls back to dates otherwise;
-that broader current contract flags 579 rows. Governance correctly uses the
+that broader canonical contract flags 579 rows. Governance correctly uses the
 production cleaning count. These values describe different rules and must not
 be reconciled by subtraction or summation.
 
@@ -186,8 +186,8 @@ Victim and suspect demographic columns are profiled for data quality only. They 
 The actions below were the recommendations at the exploratory-analysis
 milestone. They are now implemented by the deterministic cleaning, aggregate,
 forecast, hotspot, anomaly, and dashboard-contract pipeline. See the
-[project README](../README.md) for the current build order and the
-[Governance report](dashboard_governance_view.md) for current quality semantics.
+[project README](../README.md) for the documented build order and the
+[Governance report](dashboard_governance_view.md) for reviewed quality semantics.
 
 1. Normalize null-like values and invalid categories in a reproducible cleaning pipeline.
 

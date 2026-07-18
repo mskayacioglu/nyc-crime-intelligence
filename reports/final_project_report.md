@@ -1,6 +1,6 @@
 # NYC Crime Intelligence — Final Project Report
 
-Review date: `2026-07-17`
+Review date: `2026-07-18`
 
 ## Review basis
 
@@ -333,12 +333,12 @@ values remain accessible.
 
 ### Automated verification
 
-The required clean-copy verification uses a temporary local clone containing
-tracked source plus the reviewed changes, without the source repository's
-`.venv`, `node_modules`, build output, pip cache, npm cache, raw CSV, or ignored
-`data/processed` artifacts. It creates a fresh Python environment, installs the
-pinned core
-requirements without a pip cache, and runs `npm ci` with a new empty npm cache.
+The final local acceptance pass runs from the reviewed `main` tree. Python uses
+the pinned project environment, and the dashboard is reinstalled from its
+lockfile with `npm ci`; ignored raw and processed artifacts are used only by the
+explicit full-data integration pass. Separate clean-copy portability contracts
+exercise generated paths outside the repository and reject project-root leakage
+from model metrics, manifests, reports, and browser-safe artifacts.
 
 The normal verification command checks:
 
@@ -353,14 +353,31 @@ The normal verification command checks:
 - `git diff --check HEAD`; and
 - port 4173 before and after the run.
 
-On 2026-07-17, that clean-copy run completed on `main` with no configured
-remote and a clean worktree/index. All 118 Python contract tests passed; ESLint
-passed; all 212 Vitest tests across 15 files passed; and the TypeScript/Vite
-build completed after transforming 2,365 modules. The fresh `npm ci` install
-audited 278 packages with zero vulnerabilities, the explicit production audit
-also reported zero vulnerabilities, Markdown/language/privacy/path/notebook
-hygiene passed, `git diff --check HEAD` passed, and port 4173 was free before
-and after verification.
+On 2026-07-18, the required final local acceptance run completed on `main` with
+no configured remote. All 122 Python contract tests passed; all three full-data
+integration tests passed; ESLint passed; all 214 Vitest tests across 15 files
+passed; and the TypeScript/Vite build completed after transforming 2,365
+modules. The fresh `npm ci` install audited 278 packages with zero
+vulnerabilities, the explicit production audit also reported zero
+vulnerabilities, Markdown/language/privacy/path/notebook hygiene passed,
+`git diff --check HEAD` passed, and port 4173 was free before and after
+verification.
+
+That production build reported these raw/gzip sizes:
+
+| Asset | Size |
+| --- | ---: |
+| HTML | 0.64 / 0.36 kB |
+| Map CSS | 15.09 / 6.36 kB |
+| Main CSS | 66.46 / 11.35 kB |
+| Anomaly decoder JavaScript | 7.95 / 2.80 kB |
+| JSX runtime JavaScript | 9.25 / 3.50 kB |
+| Anomalies JavaScript | 10.09 / 3.12 kB |
+| Governance JavaScript | 39.73 / 10.28 kB |
+| Spatial-reference loader JavaScript | 39.86 / 11.38 kB |
+| Map JavaScript | 190.14 / 54.24 kB |
+| Main JavaScript | 219.61 / 68.81 kB |
+| Overview charts JavaScript | 404.31 / 113.53 kB |
 
 All tracked Markdown and notebook narrative also received an English-language
 review. The offline contract rejects Turkish-specific characters and common
@@ -372,15 +389,16 @@ model, and private cleaned artifacts to rebuild the Forecast Map, Map, Overview,
 and compressed Overview cube contracts in temporary paths. All outputs compare
 byte-for-byte with their committed browser-safe files. Each test fails with a
 list of missing artifacts rather than skipping. With the reviewed local
-full-data artifacts present, all three integration tests passed on 2026-07-17.
+full-data artifacts present, all three integration tests passed on 2026-07-18.
 
 ### Practical verification
 
 Practical checks cover 1280 × 900, 768 × 1024, and 390 × 844 layouts; loading,
 empty, invalid, incompatible, stale, network, and tile-failure states; map/list/
 detail synchronization; zero and missing baselines; visible focus; overflow;
-console output; and required data requests. The separate Phase 7C.3 keyboard
-gate is recorded below and is not concealed by automated coverage.
+console output; and required data requests. Phase 7C.3 also has a successful
+native-keyboard acceptance on the real local application; the evidence and the
+earlier tool-channel limitation are recorded below.
 
 ## Reproducibility instructions
 
@@ -537,21 +555,22 @@ zeros, generic health labels, or guessed policy.
 
 ## Phase 7C.3 state
 
-Phase 7C.3 is code-complete and automated-check complete, but
-**verification-incomplete**. The official 78-feature precinct geometry,
+Phase 7C.3 is complete. The official 78-feature precinct geometry,
 deterministic builder, Python and browser validators, and Forecast/Expected
 Change polygon rendering are implemented. Desktop, tablet, mobile, state,
-tile-failure, precision, responsive, console, and network checks passed.
+tile-failure, precision, responsive, console, network, and native-keyboard
+checks passed.
 
-In the allowed in-app browser, native Precinct 14 and Precinct 40 controls
-received focus and displayed the expected focus ring, but Tab/Enter/Space did
-not activate them; `aria-pressed`, the Precinct 75 detail, and polygon selection
-remained unchanged. Automated native-button coverage passes. No alternate
-browser surface, direct event dispatch, raw protocol access, or synthetic state
-mutation was used to claim success.
+The genuine keyboard acceptance used Chrome against the real local application.
+In Forecast, native Enter changed Precinct 14 from `aria-pressed="false"` to
+`"true"` and updated the detail; Tab moved focus to Precinct 40; native Space
+selected Precinct 40, cleared the Precinct 14 selection, and updated the detail.
+Expected Change passed the same Enter, Tab, and Space sequence with synchronized
+selection and detail.
 
-The single remaining Phase 7C.3 gate is one successful practical native-button
-activation through an allowed in-app browser session. Until that observation
-is recorded, the milestone must remain verification-incomplete. The detailed
-evidence is in the
+An earlier in-app browser channel focused Precinct 14 and Precinct 40 and showed
+the expected focus ring but did not dispatch Tab/Enter/Space activation. That
+historical tool limitation remains documented; it is not substituted for the
+successful Chrome observation, and no direct event dispatch or synthetic state
+mutation is used as evidence. The detailed record is in the
 [Phase 7C.3 spatial rendering report](phase_7c3_precinct_spatial_rendering.md).

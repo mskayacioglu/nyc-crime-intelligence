@@ -3,10 +3,10 @@
 ## Status and scope
 
 The dedicated **Governance** experience is implemented as the fourth,
-lazy-loaded dashboard view. It provides a complete non-chart path for published
+lazy-loaded dashboard view. It provides a complete non-chart path for committed
 data coverage, data-quality warnings, model identity and lifecycle, analytical
 artifact readiness, and responsible-use limits. Its values are dataset- and
-model-wide; they do not pretend to change with the current borough, precinct,
+model-wide; they do not pretend to change with the selected borough, precinct,
 offense, law-category, or date filters.
 
 The concise Overview **About the data** disclosure remains concise. Governance
@@ -57,7 +57,7 @@ data/processed/dashboard_precinct_spatial_reference.json
 ```
 
 The minimal contract extension was necessary because the former browser-safe
-projection did not publish the complete aggregate quality distinction or an
+projection did not include the complete aggregate quality distinction or an
 honest independent-training-time state. The existing Overview contract now
 includes deterministic source quality counts and aggregate-safe `UNKNOWN`
 counts. The existing Forecast Map contract now distinguishes model artifact
@@ -67,7 +67,7 @@ raw manifests are not exposed.
 
 ## Coverage and population semantics
 
-The published coverage values reconcile as follows:
+The committed coverage values reconcile as follows:
 
 | Meaning | Authoritative value |
 | --- | ---: |
@@ -125,7 +125,7 @@ incompatible, or unavailable values are never converted to zero.
 
 ## Model identity, lifecycle, and validation context
 
-The model is presented as **DuckDB lag ensemble regressor** with published
+The model is presented as **DuckDB lag ensemble regressor** with committed
 identity `duckdb_lag_ensemble_regressor`, model version 1, and artifact version
 1. Lifecycle fields remain distinct:
 
@@ -158,7 +158,7 @@ universal wall-clock staleness rule is invented.
 
 The view keeps adjacent products semantically distinct:
 
-| Product | Published Governance meaning |
+| Product | Governance meaning |
 | --- | --- |
 | Hotspots | Retrospective fixed-snapshot aggregate concentration; 396 rows |
 | Anomalies | Already-observed weekly aggregate deviations; 10,378 high/critical rows |
@@ -198,7 +198,7 @@ The Python builders and TypeScript loaders fail closed on:
   provenance or manifest fields.
 
 Network failures are not confused with fulfilled but invalid contracts.
-Recovery reruns the normal loaders and restores the published state when valid
+Recovery reruns the normal loaders and restores the validated state when valid
 artifacts become available. Automated tests cover loading, network error,
 invalid, incompatible, optional-unavailable, stale, empty, retry/recovery, and
 valid-zero behavior.
@@ -292,15 +292,15 @@ allowed browser surface provides no safe request-interception facility and no
 temporary production switch or harness was justified; explicit error and
 recovery behavior is covered automatically.
 
-Pointer activation opened and collapsed the native provenance disclosure. The
-permitted in-app browser left focus on the Governance button after a genuine
-Tab request while showing its visible two-pixel focus ring. Its Enter/Space
-delivery to the focused native summary failed because the browser channel could
-not maintain the focused locator target. No custom handler, alternate browser,
-or synthetic event was used. Native navigation and disclosure keyboard behavior
-pass automated tests. This browser-channel limitation does not change or close
-the separate Phase 7C.3 verification blocker, whose wording and status remain
-untouched.
+Pointer activation opened and collapsed the native provenance disclosure. An
+earlier in-app browser channel left focus on the Governance button after a Tab
+request while showing its visible two-pixel focus ring. Its Enter/Space delivery
+to the focused native summary failed because that channel could not maintain the
+focused locator target. No custom handler or synthetic event was used. Native
+navigation and disclosure keyboard behavior pass automated tests. This remains
+historical tool-channel evidence. Phase 7C.3 later completed genuine Chrome
+Enter/Tab/Space acceptance on the real predictive native-button path; the
+Governance channel result is not an open local completion gate.
 
 Every temporary browser tab and viewport override was finalized, the
 development server was stopped, and port 4173 was left free.
@@ -364,8 +364,9 @@ raw source, weekly aggregates, models, or hotspot/anomaly outputs change:
 .venv/bin/python src/analytics/build_dashboard_precinct_spatial_reference.py
 ```
 
-When all established analytical artifacts and manifests are already current and
-only their browser-safe projections need restaging, run the four
+When all established analytical artifacts and manifests have already been
+regenerated and reconciled and only their browser-safe projections need
+restaging, run the four
 `build_dashboard_*` commands only. The [root README](../README.md) documents
 raw-source identity, environment setup, the full build, and the explicit
 cleaning review horizon. A projection-only refresh must not be used to conceal
@@ -391,7 +392,7 @@ Open Governance from the fourth navigation button. Stop the server after
 verification. If the core Overview artifact is unavailable or invalid, correct
 and regenerate that contract. If only Forecast, Expected Change, Map, or spatial
 metadata is unavailable, inspect the corresponding established builder input;
-do not edit the staged JSON manually or substitute the current wall clock.
+do not edit the staged JSON manually or substitute the wall clock.
 
 ## Genuine limitations
 
@@ -403,11 +404,11 @@ do not edit the staged JSON manually or substitute the current wall clock.
   forecast.
 - Historical error metrics are overall context and cannot be interpreted as
   filter-specific performance.
-- Spatial freshness is the only wall-clock TTL classification currently
-  documented.
-- The permitted browser channel cannot complete a genuine practical
-  Tab/Shift+Tab/Enter/Space activation pass. Automated native-control coverage
-  passes, and the existing Phase 7C.3 blocker remains verification-incomplete.
+- Spatial freshness is the only documented wall-clock TTL classification.
+- An earlier in-app browser channel could not complete the Governance
+  Tab/Shift+Tab/Enter/Space pass. Automated native-control coverage passes, and
+  the completed Phase 7C.3 Chrome run separately supplies genuine predictive
+  native-button Enter/Tab/Space evidence on the real local application.
 
 ## Implementation inventory
 

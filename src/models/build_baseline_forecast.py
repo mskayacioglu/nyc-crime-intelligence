@@ -258,6 +258,16 @@ def repository_relative_path(project_root: Path, value: str | Path) -> str:
     return relative.as_posix()
 
 
+def repository_relative_paths(
+    project_root: Path, values: dict[str, Path]
+) -> dict[str, str]:
+    """Normalize a named path collection for portable metrics and reports."""
+    return {
+        name: repository_relative_path(project_root, path)
+        for name, path in values.items()
+    }
+
+
 def sql_string(value: str | Path) -> str:
     return "'" + str(value).replace("'", "''") + "'"
 
@@ -936,6 +946,7 @@ def validate_baseline_metrics_payload(payload: dict[str, Any]) -> None:
 def build_metrics_payload(
     con: Any,
     *,
+    project_root: Path,
     inputs: dict[str, Path],
     outputs: dict[str, Path],
     input_summary: dict[str, Any],
@@ -954,8 +965,8 @@ def build_metrics_payload(
     payload = {
         "generated_at_utc": datetime.now(timezone.utc).isoformat(),
         "phase": "Phase 4 - Baseline Forecast Model",
-        "inputs": {name: str(path) for name, path in inputs.items()},
-        "outputs": {name: str(path) for name, path in outputs.items()},
+        "inputs": repository_relative_paths(project_root, inputs),
+        "outputs": repository_relative_paths(project_root, outputs),
         "forecast_columns_used": FORECAST_COLUMNS_USED,
         "prediction_columns": PREDICTION_COLUMNS,
         "forecast_config": {
@@ -1250,26 +1261,32 @@ def write_baseline_report(path: Path, payload: dict[str, Any]) -> None:
         "",
         (
             f"- Best overall baseline: `{best_method}` by MAE. Lower RMSE and weighted MAE "
-            "should also be reviewed before treating this as the operational benchmark."
+            "should also be reviewed as historical context; this fixed retrospective result "
+            "is not an operational benchmark or guidance."
             if best
             else "- No best baseline could be selected because there were no evaluable predictions."
         ),
         (
             "- The hardest segments are high-volume borough/offense and precinct/offense "
-            "series with volatile week-to-week counts; these are the first places Phase 5 "
-            "should test explicit trend, seasonality, holiday, and anomaly features."
+            "series with volatile week-to-week counts; future model evaluation should examine "
+            "explicit trend, seasonality, holiday, and anomaly features in these groups."
         ),
         (
             "- `previous_year_same_week` has lower coverage for newer or sparse segments "
             "because it requires at least 52 prior zero-filled weekly observations."
         ),
         "",
-        "## Limitations Before Phase 5 ML",
+        "## Limitations",
         "",
         "- Missing weeks are inferred as zero after first observation because the Phase 2 aggregate stores observed event groups, not a complete zero-filled panel.",
         "- The latest source week is excluded from backtesting by default because it may be partial; the next-week forecast still uses it as the latest available observation.",
         "- Baselines do not model holidays, reporting delays, structural breaks, spatial spillover, or long-run trend shifts.",
-        "- Forecast intervals are not produced in Phase 4; Phase 5 should add uncertainty estimates before dashboard use.",
+        (
+            "- Forecast intervals are not produced in Phase 4. This remains an explicit "
+            "limitation: the fixed historical/demo dashboard shows point estimates and "
+            "historical validation context without inventing an interval or claiming "
+            "operational use."
+        ),
         "",
         "## Ethics Constraint",
         "",
@@ -1382,6 +1399,7 @@ def main() -> None:
     print("Building baseline metrics payload.")
     payload = build_metrics_payload(
         con,
+        project_root=project_root,
         inputs=inputs,
         outputs=outputs,
         input_summary=input_summary,

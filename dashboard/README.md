@@ -12,7 +12,7 @@ Anomalies, and Governance experiences:
 - **Anomalies** reads the already-established Overview anomaly signal and shows
   unusually high observed weekly aggregate increases against their documented
   historical expectation.
-- **Governance** lazily reconciles the existing published contracts into a
+- **Governance** lazily reconciles the existing committed contracts into a
   dedicated non-chart account of data coverage, missing-data warnings, model
   identity and lifecycle, artifact readiness, and responsible-use limits.
 
@@ -34,8 +34,8 @@ The Vite, React, and TypeScript project loads or stages these frontend-safe outp
 Governance introduces no parallel browser artifact. It projects only
 allowlisted, aggregate-safe fields from the existing Overview, Map, Forecast
 Map, and precinct-spatial contracts. The Overview build now deterministically
-publishes source-level cleaning issue counts and aggregate-safe literal
-`UNKNOWN` counts. The Forecast Map build publishes the model artifact-generation
+includes source-level cleaning issue counts and aggregate-safe literal
+`UNKNOWN` counts. The Forecast Map build records the model artifact-generation
 timestamp separately from an explicit unavailable independent training time.
 Both builders continue to write their established canonical and public copies.
 
@@ -77,20 +77,20 @@ generated at `2026-07-05T12:40:05.068774+00:00`, and its fixed forecast week is
 so Governance shows **Not independently recorded** and never relabels artifact
 generation as “last trained.” Overall MAE, RMSE, weighted MAE, and coverage are
 historical validation context, not filter-specific errors or uncertainty
-intervals. The published forecast remains a fixed repository/demo point
+intervals. The committed forecast remains a fixed repository/demo point
 estimate, not a live or real-time operational forecast.
 
 Governance separately labels the training-data horizon, artifact generation,
 fixed forecast horizon, event coverage, latest complete and partial buckets,
 contract-derived data timestamp, spatial retrieval and portal-update
-timestamps, and current viewer clock. The viewer clock is used only for the
+timestamps, and the viewer clock. The viewer clock is used only for the
 already-documented spatial TTL. No general retraining cadence, drift SLA,
 model-age threshold, or universal wall-clock staleness rule is inferred.
 
 Anomalies adds no parallel frontend artifact. The dedicated view lazily decodes
 `signals.anomalies` from `overview.json`, whose source is the established
 `crime_weekly_area.parquet` -> `anomalies.parquet` / `anomaly_metrics.json` ->
-dashboard Overview build chain. The browser-safe publication contains high and
+dashboard Overview build chain. The browser-safe projection contains high and
 critical rows only. Each row carries the observed Monday-starting week,
 borough, precinct, offense, law category, observed aggregate count, selected
 historical reference, signed positive residual, existing anomaly score, and
@@ -99,7 +99,7 @@ severity.
 The anomaly decoder accepts only the exact Overview identity and row schema,
 known dimensions and expectation sources, finite nonnegative counts/references
 and scores, positive residuals that reconcile within the four-decimal
-publication tolerance of `0.0001`, unique stable
+projection tolerance of `0.0001`, unique stable
 logical identities, deterministic order, matching summary counts, aligned
 scoring horizon, and the aggregate-only ethics flags. Contract-declared
 `missing`, `invalid`, `stale`, and `incompatible` states remain distinct;
@@ -166,11 +166,11 @@ map wrapper is required.
 
 The redesigned shell leads with active scope, geography, severity, change, and
 the analytical result. Overview stays the default view: compact primary
-metrics establish the current scope, then the weekly trend and geographic and
+metrics establish the reviewed scope, then the weekly trend and geographic and
 category comparisons receive the largest analytical surfaces. Map makes the
 geographic canvas dominant, with the selected-signal detail and accessible
 hotspot list presented as adjacent analytical panes. Anomalies uses a bounded
-complete result register beside a synchronized detail pane so every published
+complete result register beside a synchronized detail pane so every included
 signal remains available without a chart or map.
 
 Repeated methodology and responsible-use copy was removed from the primary
@@ -232,7 +232,7 @@ upstream data or model change.
 
 For a full analytical refresh, place the reviewed raw CSV at the documented
 path and rebuild every dependency in order. The explicit as-of date reproduces
-the currently published cleaning horizon:
+the reviewed cleaning horizon:
 
 ```bash
 .venv/bin/python src/data/build_clean_dataset.py --as-of-date 2026-07-04
@@ -252,8 +252,8 @@ the new review horizon. See the [root README](../README.md) and
 for the raw snapshot checksum and exact-reproduction limitation.
 
 When the cleaned aggregates, forecasts, hotspot/anomaly outputs, and model
-manifests are already current and only the browser projections need to be
-restaged, run only the dashboard builders:
+manifests have already been regenerated and reconciled and only the browser
+projections need to be restaged, run only the dashboard builders:
 
 ```bash
 .venv/bin/python src/analytics/build_dashboard_overview.py
@@ -263,7 +263,7 @@ restaged, run only the dashboard builders:
 ```
 
 If only anomaly analysis was intentionally regenerated, rebuild Overview after
-`build_anomalies.py` so the published anomaly family and shared context agree.
+`build_anomalies.py` so the browser anomaly family and shared context agree.
 
 The Forecast Map build writes byte-identical copies:
 
@@ -278,7 +278,7 @@ predictions/manifest. It never modifies those source artifacts.
 Forecast availability is explicit: `available`, `missing`, `invalid`, or
 `stale`; an `available` artifact can also be genuinely empty. Missing, invalid,
 or stale input is never represented as a valid zero forecast. The contract
-publishes one next-week point-estimate horizon only. Its selected prior-only
+contains one next-week point-estimate horizon only. Its selected prior-only
 trailing-eight-week baseline and expected-change fields are nullable where
 history is insufficient, and change percentage remains null when the baseline
 is zero. No prediction interval exists.
@@ -307,7 +307,7 @@ seven-decimal trials each collapsed a small authoritative ring, so eight is the
 minimum verified precision that preserves every ring's closure and three
 distinct non-closing vertices. Feature order, generation time, JSON encoding,
 and copies are deterministic. Pass `--skip-dashboard-copy` when only the
-canonical spatial artifact should be written. The current edition's runtime
+canonical spatial artifact should be written. The reviewed edition's runtime
 refresh deadline is 2026-09-23T19:46:58Z, derived deterministically from the
 recorded portal update plus the documented 120-day quarterly-source window.
 
@@ -328,9 +328,9 @@ established cleaned complaint parquet and aggregate-safe weekly output. The
 Forecast Map build projects only allowlisted lifecycle and historical-validation
 metadata from the existing forecast, metrics, and manifest inputs. Neither
 builder retrains a model. Do not hand-edit staged JSON, infer a missing training
-timestamp, or substitute build time/current time for source-derived time. After
-refreshing, verify byte equality between each canonical artifact and its public
-copy before running the frontend checks.
+timestamp, or substitute build time or wall-clock time for source-derived time.
+After refreshing, verify byte equality between each canonical artifact and its
+public copy before running the frontend checks.
 
 `build_anomalies.py` deterministically derives aggregate-only
 `data/processed/anomalies.parquet` and `anomaly_metrics.json` from the validated
@@ -341,8 +341,8 @@ leakage-safe model estimate when one exists; otherwise it is the prior-only
 at least four observed events, and at least three events above expectation.
 The Overview builder validates the source schema, arithmetic, flags, unique
 keys, ordering, expectation-source reconciliation, and the companion metrics'
-identity, configuration, leakage controls, counts, and horizon before
-publishing. It regenerates the existing Overview artifacts; there is no
+identity, configuration, leakage controls, counts, and horizon before writing.
+It regenerates the existing Overview artifacts; there is no
 Anomalies-specific browser file.
 
 Pass `--skip-dashboard-copy` to the Map build when only the canonical processed
@@ -384,15 +384,19 @@ Use the shared filters and select a precinct through either its polygon or the
 keyboard-operable list; both update the same detail and model context. The list
 remains the complete non-map path. In Anomalies, select any native result button
 to synchronize the visible selected row, `aria-pressed` state, and detail.
-The verified development server for this redesign is
+When the local development server is running, use
 <http://127.0.0.1:4173/>.
 
 ## Verify
 
-The current repository baseline is 212 Vitest tests across 15 files and 118
-discovered Python contract tests. The named subsections below retain the exact
-counts, bundle sizes, and practical results recorded at each milestone; older
-totals are historical snapshots, not competing current baselines.
+The reviewed 2026-07-18 repository baseline is 214 Vitest tests across 15 files,
+122 discovered Python contract tests, and three full-data integration tests.
+The production build transforms 2,365 modules, and both the clean install and
+explicit production dependency audit report zero vulnerabilities. The named
+subsections below retain the exact counts, bundle sizes, and practical results
+recorded at each milestone; older totals are historical snapshots, not
+competing reference baselines. The final project report records the complete
+2026-07-18 raw/gzip bundle table.
 
 The normal all-in-one command is run from the repository root after activating
 the documented Python environment:
@@ -455,7 +459,7 @@ switches merely to force a browser-visible delay or failure.
 
 ### Redesign verification
 
-The current redesign passes ESLint, all 41 Vitest tests, the 59-test Python
+The Phase 7A redesign passes ESLint, all 41 Vitest tests, the 59-test Python
 contract suite, and the production build (2,353 modules in 543 ms). The
 production dependency audit reports zero vulnerabilities. No dependency was added. Production bundle
 comparison, uncompressed/gzip, is:
@@ -497,7 +501,7 @@ development metadata or browser warning/error remained.
 
 ### Anomalies increment verification
 
-The current regenerated Overview contract publishes 10,378 deterministic high
+The reviewed regenerated Overview contract contains 10,378 deterministic high
 and critical anomaly rows: 3,077 critical and 7,301 high. The default inclusive
 complete-week range, 2024-12-30 through 2025-12-22, contains 645 rows: 175
 critical and 470 high. The deterministic first row is the week of 2025-06-09,
@@ -554,12 +558,13 @@ the recovery contained no console warnings or errors. The required
 and no failed request surfaced in the clean session. No temporary production
 fixture or state harness was added or left behind.
 
-The installed in-app browser again focused the native anomaly result and showed
-the visible focus ring, but it did not deliver genuine Tab/Enter/Space
-activation to the application. No custom keyboard handler or alternate browser
-surface was used. Native-button Enter/Space behavior and selection/detail
-synchronization pass in Vitest. This recorded browser-channel limitation does
-not change or close the separate Phase 7C.3 verification blocker below.
+An earlier in-app browser channel focused the native anomaly result and showed
+the visible focus ring, but did not deliver genuine Tab/Enter/Space activation
+to the application. No custom keyboard handler or synthetic event was used.
+Native-button Enter/Space behavior and selection/detail synchronization pass in
+Vitest. This is retained as historical browser-channel evidence; Phase 7C.3
+later completed genuine Chrome native-keyboard acceptance on the predictive
+list path.
 
 ### Governance increment verification
 
@@ -599,11 +604,11 @@ The Governance loading state was observed. Browser-visible network failure and
 recovery were not forced because the allowed surface provides no safe request
 interception and no temporary production harness was justified; those states
 pass focused automated coverage. Pointer activation opened and collapsed the
-native disclosure. The in-app browser showed the visible two-pixel focus ring
-but again did not move focus on a genuine Tab request, and its Enter/Space
-delivery could not maintain the focused summary target. No custom handler,
-alternate browser, or synthetic event was used. This Governance browser-channel
-limitation does not change or close the Phase 7C.3 blocker below.
+native disclosure. An earlier in-app browser channel showed the visible
+two-pixel focus ring but did not move focus on a Tab request, and its Enter/Space
+delivery could not maintain the focused summary target. No custom handler or
+synthetic event was used. This Governance result is a historical tool-channel
+limitation, not an open Phase 7C.3 gate.
 
 ### Phase 7C.3 verification
 
@@ -643,13 +648,18 @@ control measured below 44 pixels. Mobile filters opened and closed normally.
 The browser exposed no reduced-motion emulation; one loaded reduced-motion rule
 and its Vitest contract were confirmed without claiming runtime emulation.
 
-Phase 7C.3 remains verification-incomplete for one practical browser check.
-The in-app browser focused the exact native precinct button and rendered the
-visible 2-pixel focus ring, but its documented Tab/Enter/Space channels did not
-dispatch activation, so the selected detail did not change. The native-button
-keyboard test passes in Vitest, but policy was not bypassed through another
-browser surface. A successful allowed practical keyboard activation is the
-exact remaining gate.
+Phase 7C.3 is complete. The closing Chrome acceptance used genuine native
+keyboard input against the real local application. In Forecast, Enter selected
+Precinct 14 and changed its `aria-pressed` state from false to true; the detail
+updated. Tab moved focus to Precinct 40. Space selected Precinct 40, cleared the
+Precinct 14 selection, and updated the detail. Expected Change passed the same
+Enter, Tab, and Space sequence with synchronized detail and selection.
+
+The earlier in-app browser attempt focused the exact native precinct controls
+and rendered the visible 2-pixel focus ring but did not dispatch activation.
+That historical tool limitation is preserved in the Phase 7C.3 report; it is
+not substituted for the successful Chrome evidence, and no synthetic event or
+state mutation is used to claim completion.
 
 ## Map contract and filter semantics
 
@@ -677,19 +687,19 @@ both screens. Borough changes constrain the precinct choices. Precinct-grain
 rows are filterable by precinct; grid rows have no precinct assignment and are
 therefore deliberately omitted whenever a precinct filter is active. The Map
 layer control can otherwise show both grains, precinct only, or grid only.
-Reset restores the same default current scope used by Overview.
+Reset restores the same default scope used by Overview.
 
 Overview dates are inclusive Monday-based weekly buckets. Hotspots are not
-historically recomputed in the browser: the current fixed snapshot is available
+historically recomputed in the browser: the reviewed fixed snapshot is available
 only when the selected weekly range includes the latest complete Overview week.
 A historical selection displays a neutral explanation, not a fabricated zero.
 Snapshots later than the aggregate-safe event maximum are invalid; snapshots
 more than one safe-data day behind it are marked stale and their rows are not
-published. The frontend also requires the declared snapshot age to equal the
+included. The frontend also requires the declared snapshot age to equal the
 calendar-day difference between the scoring and aggregate-safe end dates. The
 UI requires the Map and Overview contracts to report the
 same aggregate-safe end date. An older Map contract asks for a data refresh; a
-newer one is treated as incompatible. Neither mismatch is rendered as current.
+newer one is treated as incompatible. Neither mismatch is rendered as compatible.
 
 ## Analytical and responsible-use boundaries
 
@@ -698,7 +708,7 @@ newer one is treated as incompatible. Neither mismatch is rendered as current.
 - The Overview trend baseline for each week uses only its prior eight weeks;
   recent change compares up to four complete weeks with an equal prior window.
 - Anomalies remain observed aggregate deviations from a documented expectation.
-- The Anomalies view publishes high and critical rows only, using a safe
+- The Anomalies view includes high and critical rows only, using a safe
   historical-week backtest reference where available and the prior-only
   13-week mean otherwise. Its score and signal priority are not probabilities,
   policing priorities, or recommendations.
@@ -706,7 +716,7 @@ newer one is treated as incompatible. Neither mismatch is rendered as current.
   unavailable rather than inferred or remapped.
 - Forecasts remain future model estimates shown only with aligned historical
   error context. Overall backtest errors are not recomputed for active filters,
-  and the current model does not provide prediction intervals.
+  and the reviewed model does not provide prediction intervals.
 - The staged Forecast Map contract describes expected aggregate reported-event
   volume for the single week after its fixed source horizon. It does not predict
   individual behavior, identify a specific future incident location, score

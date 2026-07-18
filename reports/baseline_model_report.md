@@ -130,18 +130,19 @@ Rows are filtered to segments with at least 50 actual backtest complaints.
 
 ## Interpretation
 
-- Best overall baseline: `trailing_8_week_mean` by MAE. Lower RMSE and weighted MAE should also be reviewed before treating this as the operational benchmark.
-- The hardest segments are high-volume borough/offense and precinct/offense series with volatile week-to-week counts; these are the first places Phase 5 should test explicit trend, seasonality, holiday, and anomaly features.
+- Best overall baseline: `trailing_8_week_mean` by MAE. Lower RMSE and weighted MAE should also be reviewed as historical context; this fixed retrospective result is not an operational benchmark or guidance.
+- The hardest segments are high-volume borough/offense and precinct/offense series with volatile week-to-week counts; future model evaluation should examine explicit trend, seasonality, holiday, and anomaly features in these groups.
 - `previous_year_same_week` has lower coverage for newer or sparse segments because it requires at least 52 prior zero-filled weekly observations.
 
-## Limitations Before Phase 5 ML
+## Limitations
 
 - Missing weeks are inferred as zero after first observation because the Phase 2 aggregate stores observed event groups, not a complete zero-filled panel.
 - The latest source week is excluded from backtesting by default because it may be partial; the next-week forecast still uses it as the latest available observation.
 - Baselines do not model holidays, reporting delays, structural breaks, spatial spillover, or long-run trend shifts.
 - Forecast intervals are not produced in Phase 4. This remains an explicit
-  current limitation: the published dashboard shows point estimates and
-  historical validation context without inventing an interval.
+  limitation: the fixed historical/demo dashboard shows point estimates and
+  historical validation context without inventing an interval or claiming
+  operational use.
 
 ## Ethics Constraint
 

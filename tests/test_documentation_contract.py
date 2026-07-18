@@ -42,6 +42,10 @@ def link_destination(raw: str) -> str:
     return value.split(maxsplit=1)[0]
 
 
+def normalize_whitespace(value: str) -> str:
+    return " ".join(value.split())
+
+
 class DocumentationContractTest(unittest.TestCase):
     def test_all_markdown_local_links_resolve_and_web_urls_are_well_formed(self) -> None:
         findings: list[str] = []
@@ -189,7 +193,11 @@ class DocumentationContractTest(unittest.TestCase):
             "Responsible-use and prohibited-use boundary",
             "Genuinely unavailable information",
             "Phase 7C.3 state",
-            "verification-incomplete",
+            "Phase 7C.3 is complete",
+            "native-keyboard acceptance",
+            "Tab moved focus to Precinct 40",
+            "Expected Change passed the same Enter, Tab, and Space sequence",
+            "historical tool limitation",
         )
         for term in required_terms:
             self.assertIn(term, report)
@@ -205,6 +213,79 @@ class DocumentationContractTest(unittest.TestCase):
                 re.search(rf"\b{re.escape(prohibited)}\b", report, re.IGNORECASE),
                 prohibited,
             )
+
+        for stale_status in (
+            "verification-incomplete",
+            "single remaining Phase 7C.3 gate",
+            "milestone must remain",
+        ):
+            self.assertNotIn(stale_status, report)
+
+    def test_local_completion_and_deferred_publication_boundary_are_explicit(self) -> None:
+        root_readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
+        roadmap = (PROJECT_ROOT / "Roadmap.md").read_text(encoding="utf-8")
+        normalized_root_readme = normalize_whitespace(root_readme)
+        normalized_roadmap = normalize_whitespace(roadmap)
+
+        for term in (
+            "Phase 7C.3 precinct rendering is complete",
+            "native-keyboard acceptance run in Chrome",
+            "rows excluded by the date-eligibility rule",
+            "literal `UNKNOWN` categories",
+        ):
+            self.assertIn(term, normalized_root_readme)
+
+        for term in (
+            "The local product roadmap is complete",
+            "Any external publication or release work is intentionally deferred",
+            "not remaining local product work",
+            "Phase 7C.3 official precinct rendering, responsive behavior, failure states, and native-keyboard interaction | Complete and verified",
+        ):
+            self.assertIn(term, normalized_roadmap)
+
+        for text in (root_readme, roadmap):
+            self.assertNotIn("verification-incomplete", text)
+
+        completion_records = (
+            PROJECT_ROOT / "dashboard/README.md",
+            PROJECT_ROOT / "reports/dashboard_anomalies_view.md",
+            PROJECT_ROOT / "reports/dashboard_governance_view.md",
+            PROJECT_ROOT / "reports/phase_7c2_predictive_map_ui.md",
+            PROJECT_ROOT / "reports/phase_7c3_precinct_spatial_rendering.md",
+        )
+        for document in completion_records:
+            text = document.read_text(encoding="utf-8")
+            self.assertNotIn("verification-incomplete", text, document)
+            self.assertNotRegex(text, r"(?i)\b(?:blocker remains|remaining gate)\b", document)
+
+        spatial_report = normalize_whitespace(
+            completion_records[-1].read_text(encoding="utf-8")
+        )
+        self.assertIn("closing native-keyboard acceptance used Chrome", spatial_report)
+        self.assertIn(
+            "Expected Change passed the same Enter, Tab, and Space sequence",
+            spatial_report,
+        )
+
+    def test_project_documentation_does_not_claim_external_status(self) -> None:
+        findings: list[str] = []
+        for document in tracked_markdown_paths():
+            text = document.read_text(encoding="utf-8")
+            for pattern in (
+                r"(?i)\bpublish(?:ed|es|ing)?\b",
+                r"(?i)\breleas(?:ed|es|ing)\b",
+                r"(?i)\boperational (?:screen|view|environment)\b",
+                r"(?i)\b(?:project|product|dashboard|application|repository|forecast) "
+                r"(?:is|are|was|were|remains?) (?!not\b)(?:now )?"
+                r"(?:live|current|real[- ]time|operational)\b",
+                r"(?i)\b(?:now|currently) "
+                r"(?:live|current|real[- ]time|operational|published|released)\b",
+            ):
+                if match := re.search(pattern, text):
+                    findings.append(
+                        f"{document.relative_to(PROJECT_ROOT)}: {match.group(0)!r}"
+                    )
+        self.assertEqual([], findings)
 
 
 if __name__ == "__main__":

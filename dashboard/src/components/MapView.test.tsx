@@ -305,6 +305,23 @@ describe('Predictive Map modes', () => {
     return <MapView metadata={metadata} filters={filters} onFilters={setFilters} onReset={()=>setFilters(defaults)} mapLoader={async()=>mapFixture()} forecastMapLoader={forecastLoader} precinctSpatialReferenceLoader={spatialLoader}/>
   }
 
+  function selectedPrecinct(button: HTMLElement): string {
+    const match = button.getAttribute('aria-label')?.match(/^Select precinct ([^,]+),/)
+    if (!match) throw new Error('Predictive list button is missing its precinct label.')
+    return match[1]
+  }
+
+  function expectSynchronizedSelection(button: HTMLElement) {
+    const precinct = selectedPrecinct(button)
+    expect(button).toHaveAttribute('aria-pressed', 'true')
+    expect(screen.getByRole('complementary')).toHaveTextContent(`Precinct ${precinct}`)
+    expect(
+      within(screen.getByTestId('predictive-map')).getByRole('button', {
+        name: `Mock forecast polygon precinct ${precinct}`,
+      }),
+    ).toHaveAttribute('aria-pressed', 'true')
+  }
+
   it('renders verified polygons and keeps polygon, keyboard list, and detail selection synchronized', async () => {
     const user=userEvent.setup()
     render(<PredictiveHarness/>)
@@ -323,6 +340,49 @@ describe('Predictive Map modes', () => {
     await user.click(screen.getByRole('button',{name:'Mock forecast polygon precinct 1'}))
     expect(screen.getByRole('button',{name:/Select precinct 1,/i})).toHaveAttribute('aria-pressed','true')
     expect(screen.getByRole('complementary')).toHaveTextContent('Precinct 1')
+  })
+
+  it('retains native focus through Enter, Tab, and Space selection in both predictive modes', async () => {
+    const user = userEvent.setup()
+    render(<PredictiveHarness />)
+
+    await user.click(screen.getByRole('button', { name: 'Forecast' }))
+    await screen.findByTestId('predictive-map')
+    const forecastButtons = screen.getAllByRole('button', { name: /select precinct/i })
+    const forecastEnter = forecastButtons[1]
+    const forecastSpace = forecastButtons[2]
+
+    forecastEnter.focus()
+    await user.keyboard('{Enter}')
+    expect(forecastEnter).toHaveFocus()
+    expectSynchronizedSelection(forecastEnter)
+
+    await user.tab()
+    expect(forecastSpace).toHaveFocus()
+    await user.keyboard(' ')
+    expect(forecastSpace).toHaveFocus()
+    expect(forecastEnter).toHaveAttribute('aria-pressed', 'false')
+    expectSynchronizedSelection(forecastSpace)
+
+    await user.click(screen.getByRole('button', { name: 'Expected change' }))
+    expect(
+      await screen.findByRole('heading', { name: 'Expected change' }),
+    ).toBeInTheDocument()
+    const changeButtons = screen.getAllByRole('button', { name: /select precinct/i })
+    const changeEnter = changeButtons[3]
+    const changeSpace = changeButtons[4]
+
+    changeEnter.focus()
+    await user.keyboard('{Enter}')
+    expect(changeEnter).toHaveFocus()
+    expectSynchronizedSelection(changeEnter)
+
+    await user.tab()
+    expect(changeSpace).toHaveFocus()
+    await user.keyboard(' ')
+    expect(changeSpace).toHaveFocus()
+    expect(changeEnter).toHaveAttribute('aria-pressed', 'false')
+    expectSynchronizedSelection(changeSpace)
   })
 
   it('keeps filtered polygon counts exact and distinguishes a filter-empty result', async () => {
@@ -440,6 +500,12 @@ describe('Predictive Map modes', () => {
     expect(screen.getAllByRole('button',{name:/select precinct/i})).toHaveLength(78)
     expect(screen.getByRole('complementary')).toHaveTextContent(/Expected aggregate reported-event volume/i)
     expect(screen.queryByTestId('predictive-map')).not.toBeInTheDocument()
+    if (code === 'incomplete-coverage') {
+      expect(screen.getByRole('status')).toHaveTextContent(
+        'every precinct included in the Forecast contract',
+      )
+      expect(screen.getByRole('status')).not.toHaveTextContent(/\bpublished\b/i)
+    }
   })
 
   it('does not reuse the fixed forecast for an unsupported historical range', async () => {

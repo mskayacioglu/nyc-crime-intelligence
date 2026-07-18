@@ -150,12 +150,12 @@ A row can be flagged only after minimum recent and baseline volume gates are met
 This section records the analytical-layer review before dashboard integration.
 Hotspots are now integrated with aggregate volume, baseline, lift, coordinate,
 window, and responsible-use context; see the
-[current Map report](phase_7b_map_hotspot_view.md) and
+[delivered Map report](phase_7b_map_hotspot_view.md) and
 [Governance report](dashboard_governance_view.md).
 
 - Hotspots describe elevated aggregate complaint density; they do not explain causality.
 - Reported complaint counts can be affected by reporting delay, classification changes, policy changes, and data revisions.
-- Fixed thresholds should be monitored for alert volume by borough, offense, and law category before dashboard release.
+- Fixed thresholds should be monitored for alert volume by borough, offense, and law category before broader dashboard use.
 - A dashboard should show volume gates, baseline counts, lift, coordinate coverage, and scoring window dates next to every hotspot.
 - This layer does not include uncertainty intervals, reporting-lag correction, event calendars, street-network topology, or spatial smoothing.
 

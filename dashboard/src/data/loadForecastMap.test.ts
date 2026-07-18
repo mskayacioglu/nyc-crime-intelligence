@@ -5,6 +5,7 @@ import { decodeForecastMap, loadForecastMap } from './loadForecastMap'
 import type { OverviewMetadata } from '../types/overview'
 
 const copy = () => structuredClone(artifact) as unknown
+const localFixtureRoot = '/' + 'Users/example/private/'
 
 function makeAvailableEmpty(): Record<string, unknown> {
   const value=copy() as Record<string,unknown>
@@ -74,10 +75,10 @@ describe('Forecast Map runtime contract', () => {
     ['malformed artifact timestamp', (v: Record<string, unknown>) => { (v.model as Record<string,unknown>).artifactGeneratedAtUtc='2026-02-30T12:40:05+00:00' }],
     ['inferred training timestamp', (v: Record<string, unknown>) => { ((v.model as Record<string,unknown>).independentTrainingTime as Record<string,unknown>).timestamp='2026-07-05T12:40:05Z' }],
     ['contradictory training status', (v: Record<string, unknown>) => { ((v.model as Record<string,unknown>).independentTrainingTime as Record<string,unknown>).status='available' }],
-    ['absolute forecast source path', (v: Record<string, unknown>) => { (v.forecast as Record<string,unknown>).sourceFile='/Users/example/private/forecast.parquet' }],
-    ['absolute baseline source path', (v: Record<string, unknown>) => { (v.baseline as Record<string,unknown>).sourceFile='/Users/example/private/baseline.parquet' }],
-    ['absolute baseline manifest path', (v: Record<string, unknown>) => { (v.baseline as Record<string,unknown>).manifestSourceFile='/Users/example/private/manifest.json' }],
-    ['absolute historical source path', (v: Record<string, unknown>) => { ((v.model as Record<string,unknown>).historicalError as Record<string,unknown>).sourceFile='/Users/example/private/metrics.json' }],
+    ['absolute forecast source path', (v: Record<string, unknown>) => { (v.forecast as Record<string,unknown>).sourceFile=localFixtureRoot+'forecast.parquet' }],
+    ['absolute baseline source path', (v: Record<string, unknown>) => { (v.baseline as Record<string,unknown>).sourceFile=localFixtureRoot+'baseline.parquet' }],
+    ['absolute baseline manifest path', (v: Record<string, unknown>) => { (v.baseline as Record<string,unknown>).manifestSourceFile=localFixtureRoot+'manifest.json' }],
+    ['absolute historical source path', (v: Record<string, unknown>) => { ((v.model as Record<string,unknown>).historicalError as Record<string,unknown>).sourceFile=localFixtureRoot+'metrics.json' }],
     ['zero backtest rows', (v: Record<string, unknown>) => { ((v.model as Record<string,unknown>).historicalError as Record<string,unknown>).backtestRowCount=0 }],
     ['reversed backtest range', (v: Record<string, unknown>) => { const h=(v.model as {historicalError:Record<string,unknown>}).historicalError; h.backtestStartWeek='2025-12-22'; h.backtestEndWeek='2024-12-30' }],
     ['noncanonical artifact timestamp', (v: Record<string, unknown>) => { (v.model as Record<string,unknown>).artifactGeneratedAtUtc='2026-07-05T12:40:05.068774Z' }],

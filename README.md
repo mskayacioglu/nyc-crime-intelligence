@@ -9,9 +9,9 @@ The product is designed for transparent trend exploration. It does not predict
 individual behavior, assign person-level risk, or recommend patrol,
 enforcement, deployment, or intervention decisions.
 
-## Current product status
+## Local product status
 
-The repository currently includes these dashboard experiences:
+The repository includes these dashboard experiences:
 
 | Experience | Purpose | Time semantics |
 | --- | --- | --- |
@@ -23,17 +23,18 @@ The repository currently includes these dashboard experiences:
 | Governance | Dataset/model coverage, quality warnings, lifecycle facts, readiness, and responsible-use limits | Dataset/model artifact scope, independent of dashboard filters |
 
 Overview, Map & Hotspots, Forecast, Expected Change, Anomalies, and Governance
-are implemented. Verified precinct rendering is also implemented and passes its
-automated checks. Phase 7C.3 remains verification-incomplete for one practical
-keyboard check: the permitted in-app browser can render the focused native
-precinct control and its visible focus ring, but its Tab/Enter/Space channel has
-not delivered a successful activation to the application. Automated
-native-button coverage passes, and no alternate or synthetic browser mechanism
-is used to close that gate.
+are implemented and locally verified. Phase 7C.3 precinct rendering is complete:
+all automated checks pass, and a genuine native-keyboard acceptance run in
+Chrome exercised the real local application. In Forecast, Enter selected
+Precinct 14, Tab moved focus to Precinct 40, and Space selected Precinct 40;
+`aria-pressed`, polygon selection, and detail content stayed synchronized. The
+same Enter/Tab/Space sequence passed in Expected Change. An earlier in-app
+browser channel focused the controls without dispatching activation; that tool
+limitation remains in the audit history and is not used as completion evidence.
 
 ## Reviewed data and model context
 
-The current browser-safe artifacts describe:
+The reviewed browser-safe artifacts describe:
 
 - event coverage from 2006-01-01 through 2025-12-31;
 - Monday-starting weekly buckets from 2005-12-26 through 2025-12-29;
@@ -41,7 +42,13 @@ The current browser-safe artifacts describe:
 - a partial latest bucket beginning 2025-12-29;
 - 10,071,507 cleaned source rows;
 - 10,049,687 included aggregate-safe rows; and
-- 21,820 excluded rows.
+- 21,820 rows excluded by the date-eligibility rule.
+
+The exclusions are not missing-dimension counts. Date-eligible rows with missing
+borough, precinct, or offense values remain in aggregate output as literal
+`UNKNOWN` categories. Source-quality flags can overlap and are also a separate
+population; neither the flags nor retained `UNKNOWN` values should be summed or
+equated with the 21,820 exclusions.
 
 The earlier 2005-12-26 bucket is a Monday boundary containing the first covered
 event on 2006-01-01. It does not claim that event coverage begins in 2005.
@@ -54,7 +61,7 @@ recorded** instead of relabeling artifact generation as “last trained.”
 
 The forecast is a fixed retrospective repository/demo horizon, not a live,
 rolling, or real-time operational forecast. Forecast values are point estimates;
-the current model does not provide prediction intervals. Overall historical
+the reviewed model does not provide prediction intervals. Overall historical
 errors are context for the full backtest and are not filter-specific guarantees.
 
 ## Prerequisites
@@ -77,7 +84,7 @@ in `requirements.txt`.
 
 ## Quick start: run the dashboard
 
-The committed browser-safe artifacts are sufficient to run the current UI.
+The committed browser-safe artifacts are sufficient to run the local UI.
 From the repository root:
 
 ```bash
@@ -147,8 +154,8 @@ repository root in dependency order:
 
 These are full-data builds and can require substantial disk, memory, and run
 time. The explicit `--as-of-date 2026-07-04` reproduces the review horizon used
-by the reviewed cleaning report; the CLI otherwise defaults to the viewer's
-current date. Advance that value only as part of an intentional source refresh
+by the reviewed cleaning report; the CLI otherwise defaults to the invocation
+date. Advance that value only as part of an intentional source refresh
 and record the new review horizon. For a non-destructive cleaning smoke test,
 use separate output paths as shown in
 `src/data/build_clean_dataset.py --help`; do not point a sampled run at the
@@ -171,7 +178,7 @@ raw NYPD complaint data
 ```
 
 After established analytical outputs have been refreshed, regenerate the
-current dashboard artifacts from the repository root with:
+dashboard artifacts from the repository root with:
 
 ```bash
 .venv/bin/python src/analytics/build_dashboard_overview.py
@@ -183,7 +190,7 @@ current dashboard artifacts from the repository root with:
 The builders validate inputs and write deterministic canonical artifacts under
 `data/processed/` plus browser-safe copies under `dashboard/public/data/`.
 Canonical and public copies are expected to remain byte-identical. Do not edit
-the staged JSON files manually, expose raw manifests, or use the current clock
+the staged JSON files manually, expose raw manifests, or use the wall clock
 as a substitute for source-derived timestamps.
 
 See [dashboard/README.md](dashboard/README.md) for detailed refresh ordering,

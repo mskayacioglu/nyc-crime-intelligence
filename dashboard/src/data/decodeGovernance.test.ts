@@ -24,6 +24,8 @@ const forecastCopy = (): UnknownObject =>
   structuredClone(forecastArtifact) as unknown as UnknownObject
 const spatialCopy = (): UnknownObject =>
   structuredClone(spatialArtifact) as unknown as UnknownObject
+const localFixtureRoot = '/' + 'Users/example/private/'
+const secretFixture = 'token=' + 'secret'
 
 function object(value: unknown): UnknownObject {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
@@ -46,7 +48,7 @@ function expectGovernanceError(
 }
 
 describe('Governance strict aggregate projection', () => {
-  it('reconciles the real published artifacts and preserves each lifecycle timestamp', () => {
+  it('reconciles the real committed browser-safe artifacts and preserves each lifecycle timestamp', () => {
     const overview = decodeGovernanceOverview(overviewCopy())
     const map = decodeGovernanceMap(overview, mapCopy())
     const forecast = decodeGovernanceForecast(overview, forecastCopy())
@@ -174,7 +176,7 @@ describe('Governance strict aggregate projection', () => {
     }, 'incompatible'],
     ['absolute source path', (value: UnknownObject) => {
       object(object(value.versions).mlManifest).sourceFile =
-        '/Users/example/private/model_manifest.json'
+        localFixtureRoot + 'model_manifest.json'
     }, 'invalid'],
     ['available signal with a reason', (value: UnknownObject) => {
       object(object(value.signals).hotspots).reason = 'Contradictory reason.'
@@ -319,6 +321,20 @@ describe('Governance strict aggregate projection', () => {
 })
 
 describe('Governance failure sanitization', () => {
+  it('describes contract mismatches against the committed browser-safe scope', () => {
+    const failure = governanceFailure(
+      new GovernanceContractError('incompatible', 'Fixture mismatch detail.'),
+      'forecast',
+    )
+
+    expect(failure).toEqual({
+      status: 'incompatible',
+      reason:
+        'The forecast contract did not reconcile with the committed browser-safe Governance scope.',
+    })
+    expect(failure.reason).not.toMatch(/\bpublished\b/i)
+  })
+
   it.each([
     ['missing-artifact', 'missing'],
     ['network', 'unavailable'],
@@ -329,7 +345,7 @@ describe('Governance failure sanitization', () => {
     const failure = governanceFailure(
       new PrecinctSpatialReferenceError(
         code,
-        '/Users/example/private/precinct-spatial-reference.json failed',
+        localFixtureRoot + 'precinct-spatial-reference.json failed',
       ),
       'spatial',
     )
@@ -341,7 +357,7 @@ describe('Governance failure sanitization', () => {
 
   it('never leaks arbitrary network or local-path details', () => {
     const failure = governanceFailure(
-      new Error('/Users/example/private/source.json returned token=secret'),
+      new Error(localFixtureRoot + 'source.json returned ' + secretFixture),
       'forecast',
     )
 

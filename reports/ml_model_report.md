@@ -25,7 +25,7 @@ The Phase 4 backtest window is reused. All lag and rolling features are computed
 
 ## Model
 
-`duckdb_lag_ensemble_regressor` is a deterministic lag-ensemble regressor selected by validation_rmse. It uses DuckDB and the Python standard library only because scikit-learn is not available in the local project environment.
+`duckdb_lag_ensemble_regressor` is a deterministic lag-ensemble regressor selected by validation_rmse. It uses the pinned DuckDB dependency and the Python standard library; scikit-learn is not a project dependency.
 
 Formula:
 
@@ -57,7 +57,8 @@ Validation metrics for the selected parameters:
 | Phase 5 duckdb_lag_ensemble_regressor | 437,144 | 100 | 0.4894 | 1.3943 | 3.6555 |
 | Delta ML - baseline |  |  | -0.0035 | -0.0185 | -0.0468 |
 
-The ML model beat the Phase 4 best baseline on MAE, RMSE, and weighted MAE.
+The ML model recorded lower MAE, RMSE, and weighted MAE than the Phase 4 best baseline in the manifest-level comparison.
+The comparison uses different prediction coverage—435,942 baseline rows versus 437,144 ML rows. It is not a matched-row, like-for-like gain; the metric deltas are descriptive.
 
 ## Borough Metrics
 
@@ -140,14 +141,14 @@ Rows are filtered to segments with at least 50 actual backtest complaints.
 
 ## Interpretation
 
-- Baseline comparison: The ML model beat the Phase 4 best baseline on MAE, RMSE, and weighted MAE.
+- Baseline comparison: The ML model recorded lower MAE, RMSE, and weighted MAE than the Phase 4 best baseline in the manifest-level comparison.
+- Coverage qualification: The comparison uses different prediction coverage—435,942 baseline rows versus 437,144 ML rows. It is not a matched-row, like-for-like gain; the metric deltas are descriptive.
 - Hardest segments: `BRONX / OTHER OFFENSES RELATED TO THEFT` is among the highest-error borough/offense groups after filtering for meaningful volume; these errors are concentrated in high-volume, volatile offense categories.
 - Important features and limitations: the strongest signal is short-term history from the prior 4 and 8 weeks, adjusted by last-week and 52-week references. The model does not yet include holidays, reporting-delay corrections, exogenous events, spatial spillover, or uncertainty intervals.
-- Historical pre-integration recommendation: evaluate prediction intervals and
-  drift monitoring before treating the model as operational. The current
-  dashboard is a fixed historical/demo horizon, explicitly reports that no
-  prediction interval or formal drift/retraining cadence exists, and presents
-  model lifecycle plus overall validation context in Governance.
+- Lifecycle limitations: no prediction interval, formal drift monitor, model-age
+  threshold, or general retraining cadence is established. The fixed
+  historical/demo dashboard is not operational guidance; it provides point
+  estimates and does not invent any of those capabilities or policies.
 
 ## Ethics Constraint
 

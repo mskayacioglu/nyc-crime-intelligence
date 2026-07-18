@@ -6,7 +6,7 @@ The complete roadmap, Phase 7A/7B/7C.1 reports, builder, Python contract tests,
 dashboard documentation, existing loaders/components/tests/styles, and both
 Forecast Map copies were inspected before editing. The real contract contains
 the single 2026-01-05 horizon after the 2025-12-29 observation horizon, 5,852
-published rows from 8,466 source rows, 78 precincts, five boroughs, 75 offense
+browser-safe rows from 8,466 source rows, 78 precincts, five boroughs, 75 offense
 labels, three law categories, partial trailing-eight-week baselines, and aligned
 overall backtest errors. It contains no coordinates, geometry, or intervals.
 
@@ -91,14 +91,16 @@ mobile widths there was zero page horizontal overflow; mobile mode targets were
 44px and the canvas/detail were 333px wide. The browser console had no warnings
 or errors. The temporary Vite server was stopped.
 
-Current clarification: the phrase “keyboard focus/selection” above records the
-Phase 7C.2 report's original conclusion, but it is not evidence of a successful
-native Tab/Shift+Tab/Enter/Space activation. Later allowed-browser checks could
-focus a native precinct control and show its focus ring but could not deliver
-activation to the application. The exact remaining gate is documented in the
-[Phase 7C.3 report](phase_7c3_precinct_spatial_rendering.md), and Phase 7C.3
-remains verification-incomplete. This clarification does not close or weaken
-that blocker.
+Historical clarification: the phrase “keyboard focus/selection” above records
+the Phase 7C.2 report's original conclusion, but it was not evidence of a
+successful native Tab/Shift+Tab/Enter/Space activation. A later in-app browser
+channel focused a native precinct control and showed its focus ring but could
+not dispatch activation. Phase 7C.3 subsequently closed that practical gate in
+Chrome against the real local application: Forecast and Expected Change each
+passed native Enter selection on Precinct 14, Tab focus movement to Precinct 40,
+and Space selection on Precinct 40 with synchronized detail and selection. The
+[Phase 7C.3 report](phase_7c3_precinct_spatial_rendering.md) preserves both the
+earlier tool limitation and the successful completion evidence.
 
 The predictive implementation adds no dependency. The lazy Map JavaScript is
 188.47 kB / 54.46 kB gzip, about +18.26 / +4.47 kB versus the documented Phase
@@ -106,11 +108,11 @@ The predictive implementation adds no dependency. The lazy Map JavaScript is
 remain 404.27 / 113.51 kB gzip; the predictive logic stays in the lazy Map
 boundary.
 
-Known limitations remain: one fixed next-week precinct horizon; partial latest
-source week and baseline coverage; overall rather than filter-specific errors;
-no interval; withheld noncanonical geography; and no predictive polygons or
-markers until the complete spatial prerequisite exists. These are explicit UI
-states, not silently filled gaps.
+Limitations at the Phase 7C.2 commit were: one fixed next-week precinct horizon;
+partial latest source week and baseline coverage; overall rather than
+filter-specific errors; no interval; withheld noncanonical geography; and no
+predictive polygons or markers until the complete spatial prerequisite exists.
+These were explicit UI states, not silently filled gaps.
 
 ## Phase 7C.3 resolution
 
@@ -119,10 +121,10 @@ The spatial limitation recorded above was accurate for the Phase 7C.2 commit
 resolves it with the reproducibly vendored NYC Department of City Planning / NYC
 Open Data Police Precincts dataset `y76i-bdw7`, edition 26B (May 2026). The
 official geometry reconciles exactly to all 78 Forecast location keys and is
-published through a separately validated browser contract. Forecast and
+delivered through a separately validated browser-safe contract. Forecast and
 Expected change now render verified administrative precinct MultiPolygons while
 retaining the full keyboard-accessible list/detail experience and explicit
 missing, invalid, incomplete, and mismatch states. See the
 [Phase 7C.3 report](phase_7c3_precinct_spatial_rendering.md) for provenance,
 public-use assessment, processing, rendering semantics, safeguards, and
-verification.
+verification, including the genuine Chrome Enter/Tab/Space acceptance sequence.

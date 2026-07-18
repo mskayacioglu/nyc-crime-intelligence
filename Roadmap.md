@@ -4,7 +4,7 @@
 
 The objective of this project is to develop a crime intelligence dashboard that analyzes crime incidents over time and geography using the historical NYPD Complaint dataset, produces short-term volume forecasts, and presents explainable insights to decision-makers.
 
-The initial product objective is not to make person-level predictions. The product should answer the following operational questions:
+The initial product objective is not to make person-level predictions. The product should answer the following aggregate analytical questions:
 
 - In which areas is crime volume increasing?
 - Which crime types increase at which times?
@@ -12,7 +12,7 @@ The initial product objective is not to make person-level predictions. The produ
 - Which area/crime-type combinations deviate from normal patterns?
 - Where do hotspot areas appear on the map?
 
-## 2. Current Data Status
+## 2. Reviewed Data Status
 
 The project's initial data source is:
 
@@ -37,10 +37,31 @@ Because the demographic fields have high missingness and present ethical risks, 
 - Model outputs will always be presented with historical trends, validated
   uncertainty or historical-error context, and data-quality context. When an
   interval is unavailable, the product must say so instead of inventing one.
-- Explainable, auditable, and operationally understandable metrics will take priority.
-- The first release will prioritize a reliable data pipeline and correct problem definition over a perfect model.
+- Explainable, auditable, and understandable metrics will take priority.
+- The initial local product scope prioritizes a reliable data pipeline and correct problem definition over a perfect model.
 
 ## 4. MVP Scope
+
+### Roadmap status and scope boundary
+
+The local product roadmap is complete. Sections 5 through 11 preserve the
+original plan and its delivered results; their proposal, task, sprint, and
+expected-output language is historical context, not an open implementation
+queue. The delivered local state is:
+
+| Product work | Local status |
+| --- | --- |
+| Data exploration, cleaning, aggregation, analytical baseline, baseline forecast, ML forecast, hotspots, and anomalies | Complete and verified |
+| Overview, Map & Hotspots, Forecast, Expected Change, Anomalies, and Governance | Complete and distinct |
+| Phase 7C.3 official precinct rendering, responsive behavior, failure states, and native-keyboard interaction | Complete and verified |
+
+Any external publication or release work is intentionally deferred to a future,
+separate discussion. Hosting, distribution, adding a Git remote, creating tags
+or release records, and preparing an external model or dataset upload are not
+remaining local product work, and none is performed by this roadmap closure.
+The historical API, database, framework, and deployment ideas in Sections 12–14
+were exploratory options, not delivered requirements or prerequisites for local
+completion.
 
 The first MVP should include the following capabilities:
 
@@ -166,7 +187,7 @@ data/processed/baseline_predictions.parquet
 
 ## 9. Phase 5: Machine-Learning Model
 
-Objective: Develop an explainable and operationally usable forecasting model that outperforms the baseline models.
+Objective: Develop an explainable forecasting model and compare it transparently with the baseline models.
 
 Initial proposal:
 
@@ -237,7 +258,7 @@ reports/anomaly_methodology.md
 
 ## 11. Phase 7: Dashboard Design
 
-Objective: Turn model and analytical outputs into an operationally understandable product.
+Objective: Turn model and analytical outputs into an understandable local product.
 
 Proposed views:
 
@@ -274,21 +295,22 @@ Proposed views:
 
 ### Phase 7C — Predictive Map
 
-Status: Phase 7C.1 — Forecast Map Data Contract and Phase 7C.2 — Predictive Map UI
-& Integration are complete. The Phase 7C.3 — Verified Precinct Spatial Rendering
-implementation and all automated checks are complete. Practical responsive checks
-at 1280 × 900, 768 × 1024, and 390 × 844 passed, as did checks for spatial
-error/stale/mismatch states, tile-failure resilience, and clean console/network
-activity. However, although
-the in-app browser's documented keyboard channels correctly focused the native
-list button and displayed its visible focus ring, they did not deliver the
-Enter/Space activation event to the page. Policy was not bypassed by using another
-browser surface; Phase 7C.3 remains verification-incomplete until this final
-practical keyboard gate is successfully repeated. The May 2026 26B Police
+Status: complete. Phase 7C.1 — Forecast Map Data Contract, Phase 7C.2 — Predictive
+Map UI & Integration, and Phase 7C.3 — Verified Precinct Spatial Rendering all
+pass their required checks. Practical responsive checks at 1280 × 900,
+768 × 1024, and 390 × 844 passed, as did spatial error/stale/mismatch states,
+tile-failure resilience, and clean console/network activity. A genuine
+native-keyboard acceptance run in Chrome closed the final practical gate on the
+real local application: Forecast Enter selected Precinct 14, Tab moved focus to
+Precinct 40, and Space selected Precinct 40, with `aria-pressed`, detail, and
+polygon selection synchronized; Expected Change passed the same sequence. An
+earlier in-app browser channel focused controls and displayed the focus ring but
+did not dispatch activation. That historical tool limitation is retained in the
+audit record and is not the completion evidence. The May 2026 26B Police
 Precincts source from the NYC Department of City Planning / NYC Open Data was
 vendored reproducibly, validated one-to-one against all 78
-`nypd-precinct:<label>` keys in the actual Forecast contract, and used to render
-aggregate precinct polygons in Forecast and Expected change modes. A complete,
+`nypd-precinct:<label>` keys in the Forecast contract, and used to render
+aggregate precinct polygons in Forecast and Expected Change modes. A complete,
 map-independent keyboard-accessible list/detail path was retained; missing,
 invalid, or incompatible spatial states are not represented as zero or empty
 geography.
@@ -300,7 +322,7 @@ incident volume for the next week and its difference from historical expectation
 Initial delivery scope:
 
 - The first forecast horizon will be the next week.
-- The first geographic level will be the precinct; the current model output
+- The first geographic level will be the precinct; the reviewed model output
   carries borough, precinct, crime-type, and law-category keys.
 - The Map view will allow switching among the **Hotspots**, **Forecast**, and
   **Expected change** layers.
@@ -347,10 +369,10 @@ Validation and state behavior:
 - Forecast, baseline, difference, and error values must be finite and defensible.
 - The Forecast, model manifest, and Overview data dates must be mutually consistent.
 - Missing, invalid, stale, empty, and Overview/Forecast mismatch states must remain
-  distinct; an incompatible forecast must not be presented as current.
-- A historical filter selection must not make the current future forecast appear
+  distinct; an incompatible forecast must not be presented as compatible.
+- A historical filter selection must not make the fixed future forecast appear
   historical; unsupported scope must produce a neutral state.
-- Unless the current model produces a prediction interval, the interface must show
+- Unless the reviewed model produces a prediction interval, the interface must show
   only a point estimate and validated backtest error context, and must not generate
   a confidence interval.
 
@@ -366,7 +388,7 @@ Accessibility and product language:
 - Model output must not be presented as an automated patrol, enforcement, or
   person-level decision recommendation.
 
-Out of scope for the first release:
+Out of scope for the initial local product:
 
 - Grid-level forecasting
 - Monthly or multi-horizon forecast maps
@@ -423,11 +445,12 @@ Delivered experience:
 - At 1280 x 900, 768 x 1024, and 390 x 844, there is no page-level horizontal
   overflow; mobile controls are at least 44 px.
 
-The current in-app browser focused the native button and displayed a visible
-focus ring, but did not deliver actual Tab/Enter/Space events to the application.
-No application-specific keyboard handler was added; native-control behavior was
-validated with automated regression tests. This tool limitation does not change
-or close the separate Phase 7C.3 verification-incomplete gate described above.
+An earlier in-app browser channel focused the native button and displayed a
+visible focus ring, but did not deliver actual Tab/Enter/Space events to the
+application. No application-specific keyboard handler was added; native-control
+behavior was validated with automated regression tests. The later Chrome
+acceptance exercised genuine Enter, Tab, and Space behavior on the real local
+application and closed the separate Phase 7C.3 practical gate described above.
 
 The implementation, data contract, validation, and boundaries are documented in
 `reports/dashboard_anomalies_view.md`.
@@ -436,11 +459,11 @@ The implementation, data contract, validation, and boundaries are documented in
 
 Status: complete. The separate, lazy-loaded **Governance** view presents the scope,
 data quality, model lifecycle, analytical-readiness states, and responsible-use
-boundaries of the published aggregate artifacts in a single chart-free route,
+boundaries of the committed aggregate artifacts in a single chart-free route,
 without filling filter-dependent product views with development metadata. The
 short **About the data** explanation in Overview was intentionally left unchanged;
 Governance does not show the global filter toolbar and explains that its values
-describe the published data/model artifacts as a whole, not the currently active
+describe the committed data/model artifacts as a whole, not the active
 filtered slice.
 
 Delivered experience:
@@ -455,7 +478,7 @@ Delivered experience:
   `UNKNOWN` dimension counts are presented as separate populations; overlapping
   quality categories are not summed, and `UNKNOWN` values are not assumed to have
   been excluded automatically.
-- The model is displayed by its human-readable name and published
+- The model is displayed by its human-readable name and committed
   `duckdb_lag_ensemble_regressor` identifier; the model/artifact version is 1.
   The training-data range of 2005-12-26–2025-12-29, artifact-generation time of
   `2026-07-05T12:40:05.068774+00:00`, and fixed demo forecast week of 2026-01-05
@@ -495,9 +518,9 @@ contracts with the Map and official spatial artifacts in a fail-closed manner.
 The implementation, data sources, failure behavior, validation, and actual
 limitations are documented in `reports/dashboard_governance_view.md`.
 
-## 12. Proposed Technical Architecture
+## 12. Historical Technical Proposal and Delivered Architecture
 
-A practical initial architecture:
+The initial proposal was:
 
 ```text
 Raw CSV
@@ -509,7 +532,19 @@ Raw CSV
   -> Dashboard
 ```
 
-Proposed tools:
+The delivered local architecture does not include an API or service process:
+
+```text
+Raw CSV (ignored local input)
+  -> deterministic cleaning and aggregate builders
+  -> ignored Parquet analytical artifacts and committed JSON manifests
+  -> deterministic browser-safe contract builders
+  -> committed aggregate-only dashboard artifacts
+  -> local React/Vite dashboard
+```
+
+The tools below were exploratory options. They are retained as planning history,
+not as uncompleted local requirements:
 
 - Data processing: DuckDB, Polars, or PySpark
 - Modeling: scikit-learn, LightGBM, XGBoost
@@ -519,7 +554,11 @@ Proposed tools:
 - Storage: start with Parquet, then move to Postgres/PostGIS if needed
 - Experiment tracking: MLflow or a simple model-registry directory structure
 
-## 13. Proposed Repository Structure
+## 13. Historical Repository Structure Proposal
+
+This proposal also predates the delivered structure documented in `README.md`.
+Missing proposal-only directories such as `src/api/` are not gaps in the local
+product.
 
 ```text
 data/
@@ -538,6 +577,10 @@ reports/
 ```
 
 ## 14. Sprint Plan
+
+The sprint list is a historical plan. Its product outcomes are complete where
+implemented, while proposal-only API work is outside the delivered local scope;
+none of the bullets below represents pending publication work.
 
 ### Sprint 1: Data Profiling
 
@@ -698,15 +741,15 @@ Risk: Developing a complex model too early may slow product progress.
 
 Mitigation: Follow a baseline-first, ML-model-second approach.
 
-## 18. Final Objective
+## 18. Local Objective Achieved
 
-The project's target product is:
+The completed local product is:
 
 ```text
 NYC Crime Intelligence Dashboard
 ```
 
-This product should be a decision-support dashboard that cleans and analyzes
+This product is a decision-support dashboard that cleans and analyzes
 historical crime data, displays geographic and temporal trends, flags hotspot and
 anomaly areas, produces short-term crime-volume forecasts, and presents all
 outputs in an explainable manner.

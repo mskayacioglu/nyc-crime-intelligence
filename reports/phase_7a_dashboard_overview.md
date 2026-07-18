@@ -2,7 +2,7 @@
 
 ## Scope
 
-Phase 7A adds the first operational screen for **NYC Crime Intelligence**. It is a
+Phase 7A adds the first analytical screen for **NYC Crime Intelligence**. It is a
 single aggregate Overview: no map, API, authentication, deployment, live
 ingestion, patrol recommendation, enforcement recommendation, or person-level
 score is included.
@@ -69,7 +69,7 @@ local application and production build.
 
 The generated production contract contains 1,761,447 weekly aggregate rows and
 reconciles exactly to 10,049,687 aggregate-safe events. Its default complete-week
-window contains 567,306 observed events. The optional current outputs contribute
+window contains 567,306 observed events. The optional reviewed outputs contribute
 26 high/critical hotspot rows, 10,378 high/critical anomaly rows, and 8,466
 next-week forecast rows.
 
@@ -97,7 +97,7 @@ same recent-window duration; it does not compare the recent window with the raw
 365-day baseline total. Grid-grain hotspots carry a deterministic rounded grid
 cell label so rows remain distinguishable without implementing the Phase 7B map.
 The data build accepts only one hotspot scoring date and rejects snapshots later
-than the maximum aggregate-safe event date; the current snapshot is one data day
+than the maximum aggregate-safe event date; the reviewed snapshot is one data day
 behind that event date.
 Anomalies use their own observed week and respond to the selected date range.
 Forecasts retain their future forecast week and are not presented as observed
@@ -110,14 +110,14 @@ and a reason where applicable. Missing hotspot, anomaly, forecast, metrics, or
 manifest files do not prevent observed Overview analysis. The UI renders a
 neutral unavailable state rather than a fabricated zero.
 
-The current forecast has historical error context but no uncertainty interval.
+The reviewed forecast has historical error context but no uncertainty interval.
 Its source horizon includes a partial final week, so the UI exposes that caveat
 and avoids language implying certainty. Forecast rows are withheld when the ML
 manifest does not verify disabled random splits and exclusion of the target week
 from features. They are also withheld unless the prediction file contains
 exactly one model and one forecast week, the week is strictly later than the
 latest observed aggregate week, and both identifiers match the ML manifest.
-Historical error context is published only when the metrics artifact model and
+Historical error context is included only when the metrics artifact model and
 forecast week align with both files. MAE/RMSE values are labeled as overall model
 backtest errors and are not represented as filter-specific errors.
 
@@ -167,7 +167,7 @@ solid contrast treatment.
   historical deviation, and forecasts are model estimates. They are not
   interchangeable.
 - The forecast has backtest error context but no confidence interval.
-- Current forecast backtest context is MAE 0.4894, RMSE 1.3943, and weighted MAE
+- Reviewed forecast backtest context is MAE 0.4894, RMSE 1.3943, and weighted MAE
   3.6555 with 100% prediction coverage.
 - Map analysis remains out of scope until Phase 7B.
 
