@@ -1401,13 +1401,22 @@ def write_ml_report(path: Path, payload: dict[str, Any]) -> None:
     hardest_borough_offense = payload["hardest_segments"]["borough_offense"]
     hardest_precinct_offense = payload["hardest_segments"]["precinct_offense"]
     selected_params = payload["model_config"]["selected_parameters"]
+    comparison_rows_for_report = []
+    for row in comparison["comparison_rows"]:
+        report_row = dict(row)
+        model_label = str(report_row.get("model", ""))
+        if model_label.startswith("Phase 4 "):
+            report_row["model"] = f"`{model_label.removeprefix('Phase 4 ')}`"
+        elif model_label.startswith("Phase 5 "):
+            report_row["model"] = f"`{model_label.removeprefix('Phase 5 ')}`"
+        comparison_rows_for_report.append(report_row)
 
     beat_sentence = (
-        "The ML model recorded lower MAE, RMSE, and weighted MAE than the Phase 4 "
-        "best baseline in the manifest-level comparison."
+        "The ML model recorded lower MAE, RMSE, and weighted MAE than the selected "
+        "baseline in the manifest-level comparison."
         if comparison["beats_baseline_all_core_metrics"]
         else (
-            "The ML model did not record a lower value than the Phase 4 best baseline "
+            "The ML model did not record a lower value than the selected baseline "
             "on every core metric in the manifest-level comparison. "
             f"Beat flags: MAE={beats.get('mae')}, RMSE={beats.get('rmse')}, "
             f"weighted MAE={beats.get('weighted_mae')}."
@@ -1443,10 +1452,12 @@ def write_ml_report(path: Path, payload: dict[str, Any]) -> None:
         "## Scope",
         "",
         (
-            "This Phase 5 model reads `crime_weekly_area.parquet` and forecasts next-week "
+            "The model builder reads `crime_weekly_area.parquet` and forecasts next-week "
             "`crime_count` for each borough, precinct, offense type, and law category segment. "
-            "It implements only the initial weekly ML forecast model and does not add dashboard, "
-            "hotspot, anomaly, API, or enforcement-recommendation layers."
+            "Its output is integrated into the browser-safe forecast contracts, but the "
+            "builder itself remains responsible only for aggregate model training, "
+            "historical evaluation, and fixed-horizon prediction. It does not produce an "
+            "API or any enforcement recommendation."
         ),
         "",
         "## Inputs and Outputs",
@@ -1472,7 +1483,7 @@ def write_ml_report(path: Path, payload: dict[str, Any]) -> None:
             ]
         ),
         "",
-        "The Phase 4 backtest window is reused. All lag and rolling features are computed "
+        "The baseline backtest window is reused. All lag and rolling features are computed "
         "with windows ending one row before the target week.",
         "",
         "## Model",
@@ -1521,10 +1532,10 @@ def write_ml_report(path: Path, payload: dict[str, Any]) -> None:
             ],
         ),
         "",
-        "## Comparison with Phase 4 Best Baseline",
+        "## Comparison with the selected baseline",
         "",
         markdown_table(
-            comparison["comparison_rows"],
+            comparison_rows_for_report,
             [
                 "model",
                 "prediction_count",

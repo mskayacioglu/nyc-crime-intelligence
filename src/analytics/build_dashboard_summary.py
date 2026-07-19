@@ -1255,9 +1255,9 @@ def write_exploratory_report(path: Path, payload: dict[str, Any]) -> None:
         "## Scope",
         "",
         (
-            "This Phase 3 analytical baseline reads the cleaned Phase 2 Parquet outputs "
-            "and produces dashboard-ready descriptive summaries. It does not implement "
-            "forecasting, machine learning, APIs, or a dashboard UI."
+            "The exploratory analysis reads the canonical cleaned Parquet outputs and "
+            "produces dashboard-ready descriptive summaries. Forecasting, machine "
+            "learning, and browser-contract construction are handled by separate builders."
         ),
         "",
         "## Inputs",
@@ -1414,7 +1414,7 @@ def write_exploratory_report(path: Path, payload: dict[str, Any]) -> None:
         (
             "Victim and suspect demographic fields are intentionally excluded from "
             "this dashboard summary. They are not used as grouping fields, ranking "
-            "features, heatmap dimensions, or future model features in this Phase 3 work."
+            "features, heatmap dimensions, or model features."
         ),
         "",
         "Excluded fields:",

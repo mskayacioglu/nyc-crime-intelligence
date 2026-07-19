@@ -181,13 +181,12 @@ Victim and suspect demographic columns are profiled for data quality only. They 
 | VIC_SEX        |    0.00305813 |                     6 |
 
 
-## Historical next actions
+## Implemented follow-up
 
-The actions below were the recommendations at the exploratory-analysis
-milestone. They are now implemented by the deterministic cleaning, aggregate,
+The actions below are implemented by the deterministic cleaning, aggregate,
 forecast, hotspot, anomaly, and dashboard-contract pipeline. See the
-[project README](../README.md) for the documented build order and the
-[Governance report](dashboard_governance_view.md) for reviewed quality semantics.
+[project README](../README.md) for the build order and the
+[final project report](final_project_report.md) for reviewed quality semantics.
 
 1. Normalize null-like values and invalid categories in a reproducible cleaning pipeline.
 

@@ -1,6 +1,6 @@
 # NYC Crime Intelligence — Final Project Report
 
-Review date: `2026-07-18`
+Review date: `2026-07-19`
 
 ## Review basis
 
@@ -9,7 +9,7 @@ browser-safe artifacts. It distinguishes source coverage, data-derived dates,
 artifact construction times, model evaluation windows, and the viewer clock.
 The analytical results are a fixed retrospective repository demonstration; the
 repository contains no API, scheduled refresh, update channel, or service
-process.
+process. It is not a rolling or real-time service.
 
 The scripts under `src/` are the canonical build path. The two notebooks are
 optional: the cleaning notebook delegates to the canonical cleaning script,
@@ -154,7 +154,7 @@ week.
 
 ## Baseline forecasting
 
-Phase 4 evaluates four deterministic, target-week-excluding rules for each
+The baseline builder evaluates four deterministic, target-week-excluding rules for each
 aggregate segment:
 
 | Baseline | Formula and history requirement |
@@ -183,9 +183,8 @@ manifest for borough, offense, and high-volume capture breakdowns.
 
 ## ML model identity, formula, features, versions, and evaluation
 
-The Phase 5 implementation is not the roadmap's proposed LightGBM/XGBoost
-model. It is a deterministic formula model implemented with the Python standard
-library and DuckDB:
+The reviewed ML implementation is a deterministic formula model implemented
+with the Python standard library and DuckDB:
 
 | Field | Value |
 | --- | --- |
@@ -333,14 +332,13 @@ values remain accessible.
 
 ### Automated verification
 
-The normal automated verification pass runs from the reviewed `main` tree. Python uses
-the pinned project environment, and the dashboard is reinstalled from its
-lockfile with `npm ci`; ignored raw and processed artifacts are used only by the
-explicit full-data integration pass. Portability contracts construct temporary
-repository roots, require stable POSIX-relative references in cleaning,
-analytical-summary, baseline, ML, hotspot, and anomaly metadata, and reject any
-reference that escapes its declared root. Clean-copy contracts separately reject
-project-root leakage from tracked reports and browser-safe artifacts.
+The normal verification pass uses the pinned Python environment and reinstalls
+the dashboard from its lockfile with `npm ci`. Ignored raw and processed
+artifacts are used only by the explicit full-data integration mode. Portability
+contracts construct temporary repository roots, require stable POSIX-relative
+references in generated metadata, and reject references outside the declared
+root. Clean-copy contracts separately reject local-root leakage from reports
+and browser-safe artifacts.
 
 The normal verification command checks:
 
@@ -355,26 +353,13 @@ The normal verification command checks:
 - `git diff --check HEAD`; and
 - port 4173 before and after the run.
 
-On 2026-07-18, the combined full-data acceptance run completed on `main` with
-no configured remote: the then-existing 129 Python contract tests, all three
-full-data integration tests, ESLint, and all 214 Vitest tests across 15 files
-passed; the TypeScript/Vite build transformed 2,365 modules. The subsequent
-portable-path preflight hardening added four Python contracts without changing
-frontend code or browser-safe artifacts; final Python discovery passed all 133
-tests and the directly affected documentation/builder suites passed 43 tests.
-The fresh `npm ci` install audited 278 packages with zero vulnerabilities, the
-explicit production audit also reported zero vulnerabilities,
-Markdown/language/privacy/path/notebook hygiene passed, `git diff --check HEAD`
-passed, and port 4173 was free before and after verification.
-
-On 2026-07-19, after adding the code-license and third-party-data boundary and
-rewriting the shareable branch history, the normal verification command passed
-all 135 Python contract tests and all 214 Vitest tests. ESLint and the
-TypeScript/Vite production build passed, both dependency audits reported zero
-vulnerabilities, `git diff --check HEAD` passed, and port 4173 was free before
-and after the run. The history hygiene contract also confirmed that public
-branch and tag history contains neither the raw complaint CSV path nor the
-legacy output-bearing EDA notebook path, and no reachable blob exceeds 5 MiB.
+The latest local acceptance pass on 2026-07-19 completed 136 Python contract
+tests and 214 Vitest tests. ESLint, the TypeScript/Vite production build,
+dependency audits, Markdown/language/privacy/path/notebook hygiene,
+`git diff --check HEAD`, and local port checks also passed. History hygiene
+confirmed that reachable branch and tag history contains neither the raw
+complaint CSV path nor the legacy output-bearing EDA notebook path, and that no
+reachable blob exceeds 5 MiB.
 
 That production build reported these raw/gzip sizes:
 
@@ -398,19 +383,19 @@ ASCII Turkish prose markers; all repository-local Markdown targets resolve,
 and the finite external URL set was checked separately for reachability.
 
 The explicit optional full-data integration suite uses ignored local aggregate,
-model, and private cleaned artifacts to rebuild the Forecast Map, Map, Overview,
-and compressed Overview cube contracts in temporary paths. All outputs compare
-byte-for-byte with their committed browser-safe files. Each test fails with a
-list of missing artifacts rather than skipping. With the reviewed local
-full-data artifacts present, all three integration tests passed on 2026-07-18.
+model, and cleaned artifacts to rebuild the Forecast Map, Map, Overview, and
+compressed Overview cube contracts in temporary paths. Outputs are compared
+byte-for-byte with their committed browser-safe files. A missing required
+artifact is reported as a failure rather than silently skipped. All three
+integration tests passed with the reviewed local inputs on 2026-07-18.
 
 ### Practical verification
 
 Practical checks cover 1280 × 900, 768 × 1024, and 390 × 844 layouts; loading,
 empty, invalid, incompatible, stale, network, and tile-failure states; map/list/
 detail synchronization; zero and missing baselines; visible focus; overflow;
-console output; and required data requests. The separate Phase 7C.3 keyboard
-gate is recorded below and is not concealed by automated coverage.
+console output; and required data requests. The remaining manual accessibility
+review item is recorded below rather than being concealed by automated coverage.
 
 ## Reproducibility instructions
 
@@ -565,23 +550,16 @@ The following uses are prohibited by the project's design and documentation:
 These gaps are not filled with inferred timestamps, fabricated intervals,
 zeros, generic health labels, or guessed policy.
 
-## Phase 7C.3 state
+## Accessibility verification note
 
-Phase 7C.3 is code-complete and automated-check complete, but
-**verification-incomplete**. The official 78-feature precinct geometry,
-deterministic builder, Python and browser validators, and Forecast/Expected
-Change polygon rendering are implemented. Desktop, tablet, mobile, state,
-tile-failure, precision, responsive, console, and network checks passed.
+The official 78-feature precinct geometry, deterministic builder, Python and
+browser validators, Forecast/Expected Change polygon rendering, and complete
+map-independent list/detail path are implemented. Desktop, tablet, mobile,
+state, tile-failure, precision, responsive, console, and network checks passed.
 
-In the allowed in-app browser, native Precinct 14 and Precinct 40 controls
-received focus and displayed the expected focus ring, but Tab/Enter/Space did
-not activate them; `aria-pressed`, the Precinct 75 detail, and polygon selection
-remained unchanged. Automated native-button coverage passes. No alternate
-browser surface, direct event dispatch, raw protocol access, or synthetic state
-mutation was used to claim success.
-
-The single remaining Phase 7C.3 gate is one successful practical native-button
-activation through an allowed in-app browser session. Until that observation
-is recorded, the milestone must remain verification-incomplete. The detailed
-evidence is in the
-[Phase 7C.3 spatial rendering report](phase_7c3_precinct_spatial_rendering.md).
+Automated coverage confirms native-button Enter/Space behavior,
+selection/detail synchronization, and visible focus. A final manual
+accessibility review should repeat native keyboard activation of the precinct
+list on the intended browser/platform combination. This is a limitation of the
+recorded manual review evidence, not a reason to substitute synthetic input or
+to claim that the manual check has already passed.

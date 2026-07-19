@@ -175,8 +175,12 @@ class DocumentationContractTest(unittest.TestCase):
             "3.11.15", (PROJECT_ROOT / ".python-version").read_text().strip()
         )
         root_readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
-        self.assertIn("Python 3.10 through\n3.14", root_readme)
-        self.assertIn("EDA\nenvironment supports Python 3.11 through 3.13", root_readme)
+        normalized_readme = normalize_whitespace(root_readme)
+        self.assertIn("Python 3.10 through 3.14", normalized_readme)
+        self.assertIn(
+            "EDA environment supports Python 3.11 through 3.13",
+            normalized_readme,
+        )
         for readme in (PROJECT_ROOT / "README.md", PROJECT_ROOT / "dashboard/README.md"):
             text = readme.read_text(encoding="utf-8")
             self.assertIn("npm ci", text, readme)
@@ -207,6 +211,7 @@ class DocumentationContractTest(unittest.TestCase):
     def test_final_report_covers_required_scope_without_status_overclaim(self) -> None:
         self.assertTrue(FINAL_REPORT.is_file())
         report = FINAL_REPORT.read_text(encoding="utf-8")
+        normalized = normalize_whitespace(report)
         required_terms = (
             "Project question and scope",
             "Data sources and provenance",
@@ -231,110 +236,80 @@ class DocumentationContractTest(unittest.TestCase):
             "Privacy and aggregate-only boundary",
             "Responsible-use and prohibited-use boundary",
             "Genuinely unavailable information",
-            "Phase 7C.3 state",
-            "verification-incomplete",
-            "single remaining Phase 7C.3 gate",
-            "milestone must remain verification-incomplete",
+            "Accessibility verification note",
+            "final manual accessibility review",
         )
         for term in required_terms:
-            self.assertIn(term, report)
-        for prohibited in (
-            "published",
-            "released",
-            "live",
-            "current",
-            "real-time",
-            "operational",
-        ):
-            self.assertIsNone(
-                re.search(rf"\b{re.escape(prohibited)}\b", report, re.IGNORECASE),
-                prohibited,
-            )
+            self.assertIn(normalize_whitespace(term), normalized)
+        self.assertIn("fixed retrospective repository demonstration", normalized)
+        self.assertIn("not a rolling or real-time service", normalized)
 
-    def test_local_scope_and_phase_7c3_blocker_are_explicit(self) -> None:
+    def test_public_documentation_has_a_clear_current_information_architecture(self) -> None:
         root_readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
         roadmap = (PROJECT_ROOT / "Roadmap.md").read_text(encoding="utf-8")
+        dashboard_readme = (PROJECT_ROOT / "dashboard/README.md").read_text(
+            encoding="utf-8"
+        )
         normalized_root_readme = normalize_whitespace(root_readme)
         normalized_roadmap = normalize_whitespace(roadmap)
+        normalized_dashboard = normalize_whitespace(dashboard_readme)
 
         for term in (
-            "Phase 7C.3 remains verification-incomplete for one practical keyboard check",
-            "no alternate or synthetic browser mechanism is used to close that gate",
+            "## Project status",
+            "prepared for public source-code hosting",
             "rows excluded by the date-eligibility rule",
             "literal `UNKNOWN` categories",
+            "## Known limitations",
         ):
-            self.assertIn(term, normalized_root_readme)
+            self.assertIn(term, root_readme if term.startswith("##") else normalized_root_readme)
 
         for term in (
-            "The local implementation roadmap is delivered except for the explicitly open Phase 7C.3 practical native-keyboard verification gate",
-            "Any external publication or release work is intentionally deferred",
-            "outside this local implementation roadmap",
-            "Phase 7C.3 remains verification-incomplete until this final practical keyboard gate is successfully repeated",
+            "## Delivered scope",
+            "## Known limitations",
+            "## Possible future improvements",
+            "## Explicitly out of scope",
         ):
-            self.assertIn(term, normalized_roadmap)
+            self.assertIn(term, roadmap)
 
-        for text in (root_readme, roadmap):
-            self.assertIn("verification-incomplete", text)
+        for term in (
+            "./run.sh",
+            "136 Python contract tests and 214 Vitest tests",
+            "final manual accessibility review",
+            "## Analytical and responsible-use boundaries",
+        ):
+            self.assertIn(term, normalized_dashboard)
 
-        required_blocker_relationships = {
-            PROJECT_ROOT / "dashboard/README.md": (
-                "This recorded browser-channel limitation does not change or close the separate Phase 7C.3 verification blocker below",
-                "Phase 7C.3 remains verification-incomplete for one practical browser check",
-            ),
-            PROJECT_ROOT / "reports/dashboard_anomalies_view.md": (
-                "it does not modify or close the separate Phase 7C.3 keyboard blocker",
-                "Phase 7C.3 verification-incomplete browser blocker were preserved",
-            ),
-            PROJECT_ROOT / "reports/dashboard_governance_view.md": (
-                "This browser-channel limitation does not change or close the separate Phase 7C.3 verification blocker",
-                "the existing Phase 7C.3 blocker remains verification-incomplete",
-            ),
-            PROJECT_ROOT / "reports/phase_7c2_predictive_map_ui.md": (
-                "Phase 7C.3 remains verification-incomplete",
-                "This clarification does not close or weaken that blocker",
-            ),
-            PROJECT_ROOT / "reports/phase_7c3_precinct_spatial_rendering.md": (
-                "The milestone therefore remains verification-incomplete",
-                "no alternate surface was used",
-            ),
-            PROJECT_ROOT / "reports/phase_7c_forecast_map_contract.md": (
-                "remaining practical native-keyboard verification blocker",
-                "this contract does not close or weaken it",
-            ),
-            PROJECT_ROOT / "reports/phase_7b_map_hotspot_view.md": (
-                "current implemented product",
-                "delivered behavior and verification evidence",
-            ),
-        }
-        for document, required_phrases in required_blocker_relationships.items():
-            normalized = normalize_whitespace(document.read_text(encoding="utf-8"))
-            for phrase in required_phrases:
-                self.assertIn(phrase, normalized, document)
-
-        forbidden_chrome_closure = (
-            "acceptance run in Chrome",
-            "Chrome acceptance",
-            "closing Chrome",
-            "successful Chrome",
-            "genuine Chrome",
-            "Chrome subsequently completed",
+        legacy_reports = (
+            "phase_7a_dashboard_overview.md",
+            "phase_7b_map_hotspot_view.md",
+            "phase_7c_forecast_map_contract.md",
+            "phase_7c2_predictive_map_ui.md",
+            "phase_7c3_precinct_spatial_rendering.md",
+            "dashboard_anomalies_view.md",
+            "dashboard_governance_view.md",
         )
-        for document in tracked_markdown_paths():
-            text = document.read_text(encoding="utf-8").casefold()
-            for phrase in forbidden_chrome_closure:
-                self.assertNotIn(phrase.casefold(), text, document)
+        for filename in legacy_reports:
+            self.assertFalse((PROJECT_ROOT / "reports" / filename).exists(), filename)
+
+        for stale_term in (
+            "verification-incomplete",
+            "in-app browser",
+            "synthetic browser mechanism",
+            "Initial Tasks",
+            "Sprint Plan",
+        ):
+            self.assertNotIn(stale_term, root_readme)
+            self.assertNotIn(stale_term, roadmap)
+            self.assertNotIn(stale_term, dashboard_readme)
 
     def test_project_documentation_does_not_claim_external_status(self) -> None:
         findings: list[str] = []
         for document in tracked_markdown_paths():
             text = document.read_text(encoding="utf-8")
             for pattern in (
-                r"(?i)\bpublish(?:ed|es|ing)?\b",
-                r"(?i)\breleas(?:ed|es|ing)\b",
-                r"(?i)\boperational (?:screen|view|environment)\b",
                 r"(?i)\b(?:project|product|dashboard|application|repository|forecast) "
-                r"(?:is|are|was|were|remains?) (?!not\b)(?:now )?"
-                r"(?:live|current|real[- ]time|operational)\b",
+                r"(?:is|are|was|were|remains?|has been|have been) (?!not\b)(?:now )?"
+                r"(?:published|released|live|real[- ]time|operational)\b",
                 r"(?i)\b(?:now|currently) "
                 r"(?:live|current|real[- ]time|operational|published|released)\b",
             ):

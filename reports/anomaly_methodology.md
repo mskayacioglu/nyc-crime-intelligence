@@ -4,7 +4,11 @@ Generated at UTC: `2026-07-07T12:43:01.375556+00:00`
 
 ## Scope
 
-This Phase 6A layer identifies unusually high aggregate weekly crime counts for borough, precinct, offense type, and law category segments. It implements only anomaly detection; it does not create hotspot maps, dashboards, APIs, patrol recommendations, or person-level scores.
+The anomaly builder identifies unusually high aggregate weekly complaint counts
+for borough, precinct, offense type, and law category segments. Its output is
+integrated into the dashboard's aggregate list/detail experience, while the
+builder remains responsible only for retrospective anomaly analysis. It does
+not create an API, patrol recommendation, or person-level score.
 
 ## Inputs and Outputs
 
@@ -22,7 +26,8 @@ The script builds a zero-filled weekly panel after each segment first appears. F
 Scoring formulas:
 
 - `expected_historical_count = mean(prior 13 weekly counts)`.
-- `expected_ml_count = Phase 5 predicted_crime_count` when a safe backtest prediction exists.
+- `expected_ml_count = predicted_crime_count` from the reviewed ML backtest when
+  a safe prediction exists.
 - `expected_count = expected_ml_count` when available, otherwise `expected_historical_count`.
 - `residual_count = actual_crime_count - expected_count`.
 - `historical_residual_count = actual_crime_count - expected_historical_count`.
@@ -39,7 +44,8 @@ A segment-week can be flagged only when it has enough prior history, enough rece
 - No random splits are used.
 - Missing segment-weeks are zero-filled only after the segment first appears.
 - The latest source week is excluded from scoring by default because it may be partial.
-- ML residuals use only Phase 5 backtest predictions with actual counts; next-week forecast rows are excluded.
+- ML residuals use only reviewed backtest predictions with actual counts;
+  next-week forecast rows are excluded.
 - ML prediction use status: `used`.
 
 ## Evaluation Summary
@@ -149,19 +155,22 @@ These borough/offense groups have the largest average absolute historical residu
 | BROOKLYN | POSSESSION OF STOLEN PROPERTY | 104 | 512 | 33 | 9 | 31.7308 | 1.5039 | 3.3084 | 5.9466 |
 | STATEN ISLAND | OTHER OFFENSES RELATED TO THEFT | 61 | 498 | 13 | 3 | 21.3115 | 3.366 | 3.3077 | 5.1896 |
 
-## Historical pre-integration limitations
+## Limitations and dashboard context
 
-This section records the analytical-layer review before dashboard integration.
-Anomalies are now integrated with the complete list/detail experience and the
-expected-count, residual, prior-volume, lifecycle, and limitation context
-described in the [delivered Anomalies report](dashboard_anomalies_view.md).
+Anomalies are integrated with a complete list/detail experience and display
+expected count, residual, prior volume, lifecycle, and limitation context. See
+the [dashboard README](../dashboard/README.md) and
+[final project report](final_project_report.md) for the browser contract and
+responsible-use boundary.
 
 - The layer identifies unusually high aggregate counts; it does not explain causality.
 - The latest source week may be partial depending on the upstream data extract.
 - Reported complaint counts can be affected by reporting delay, policy changes, classification changes, and data revisions.
-- The reviewed thresholds are conservative defaults and should be monitored for alert volume by borough and offense type.
+- The reviewed thresholds are conservative defaults and should be monitored for
+  signal volume by borough and offense type when the analytical snapshot changes.
 - No uncertainty intervals, holidays, special events, spatial spillover terms, or reporting-lag corrections are included yet.
-- Dashboard surfaces should show the expected count, residual, prior volume gate, and model age next to every anomaly.
+- The dashboard shows expected count, residual, prior volume gate, and model
+  lifecycle context with anomaly results.
 
 ## Ethics Constraint
 

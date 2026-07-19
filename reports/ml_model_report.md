@@ -4,7 +4,12 @@ Generated at UTC: `2026-07-05T12:40:05.068774+00:00`
 
 ## Scope
 
-This Phase 5 model reads `crime_weekly_area.parquet` and forecasts next-week `crime_count` for each borough, precinct, offense type, and law category segment. It implements only the initial weekly ML forecast model and does not add dashboard, hotspot, anomaly, API, or enforcement-recommendation layers.
+The model builder reads `crime_weekly_area.parquet` and forecasts next-week
+`crime_count` for each borough, precinct, offense type, and law category
+segment. Its output is integrated into the browser-safe forecast contracts, but
+the builder itself remains responsible only for aggregate model training,
+historical evaluation, and fixed-horizon prediction. It does not produce an API
+or any enforcement recommendation.
 
 ## Inputs and Outputs
 
@@ -21,7 +26,8 @@ This Phase 5 model reads `crime_weekly_area.parquet` and forecasts next-week `cr
 | --- | --- | --- | --- | --- | --- | --- | --- | --- |
 | 2005-12-26 | 2025-12-29 | 2024-01-01 | 2024-12-23 | 2024-12-30 | 2025-12-22 | 2026-01-05 | 8,466 | 437,144 |
 
-The Phase 4 backtest window is reused. All lag and rolling features are computed with windows ending one row before the target week.
+The baseline backtest window is reused. All lag and rolling features are
+computed with windows ending one row before the target week.
 
 ## Model
 
@@ -49,15 +55,16 @@ Validation metrics for the selected parameters:
 | --- | --- | --- | --- | --- | --- | --- |
 | 437,144 | 437,144 | 100 | 567,306 | 0.4894 | 1.3943 | 3.6555 |
 
-## Comparison with Phase 4 Best Baseline
+## Comparison with the selected baseline
 
 | model | prediction_count | prediction_coverage_pct | mae | rmse | weighted_mae |
 | --- | --- | --- | --- | --- | --- |
-| Phase 4 trailing_8_week_mean | 435,942 | 99.73 | 0.4929 | 1.4128 | 3.7023 |
-| Phase 5 duckdb_lag_ensemble_regressor | 437,144 | 100 | 0.4894 | 1.3943 | 3.6555 |
+| `trailing_8_week_mean` | 435,942 | 99.73 | 0.4929 | 1.4128 | 3.7023 |
+| `duckdb_lag_ensemble_regressor` | 437,144 | 100 | 0.4894 | 1.3943 | 3.6555 |
 | Delta ML - baseline |  |  | -0.0035 | -0.0185 | -0.0468 |
 
-The ML model recorded lower MAE, RMSE, and weighted MAE than the Phase 4 best baseline in the manifest-level comparison.
+The ML model recorded lower MAE, RMSE, and weighted MAE than the selected
+baseline in the manifest-level comparison.
 The comparison uses different prediction coverage—435,942 baseline rows versus 437,144 ML rows. It is not a matched-row, like-for-like gain; the metric deltas are descriptive.
 
 ## Borough Metrics
@@ -141,7 +148,8 @@ Rows are filtered to segments with at least 50 actual backtest complaints.
 
 ## Interpretation
 
-- Baseline comparison: The ML model recorded lower MAE, RMSE, and weighted MAE than the Phase 4 best baseline in the manifest-level comparison.
+- Baseline comparison: The ML model recorded lower MAE, RMSE, and weighted MAE
+  than the selected baseline in the manifest-level comparison.
 - Coverage qualification: The comparison uses different prediction coverage—435,942 baseline rows versus 437,144 ML rows. It is not a matched-row, like-for-like gain; the metric deltas are descriptive.
 - Hardest segments: `BRONX / OTHER OFFENSES RELATED TO THEFT` is among the highest-error borough/offense groups after filtering for meaningful volume; these errors are concentrated in high-volume, volatile offense categories.
 - Important features and limitations: the strongest signal is short-term history from the prior 4 and 8 weeks, adjusted by last-week and 52-week references. The model does not yet include holidays, reporting-delay corrections, exogenous events, spatial spillover, or uncertainty intervals.

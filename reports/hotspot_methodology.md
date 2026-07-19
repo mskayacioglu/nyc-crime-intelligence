@@ -6,7 +6,12 @@ Deterministic metadata timestamp derived from scoring_end_date at 00:00 UTC so r
 
 ## Scope
 
-This Phase 6B layer identifies elevated recent aggregate crime density for precinct/offense/law-category and grid-cell/offense/law-category groups. It implements only hotspot detection; it does not create dashboard UI, APIs, patrol recommendations, enforcement recommendations, or person-level scores.
+The hotspot builder identifies elevated recent aggregate complaint density for
+precinct/offense/law-category and grid-cell/offense/law-category groups. Its
+output is integrated into the dashboard's map and complete list/detail path,
+while the builder remains responsible only for retrospective aggregate hotspot
+analysis. It does not create an API, patrol or enforcement recommendation, or
+person-level score.
 
 ## Inputs and Outputs
 
@@ -52,7 +57,8 @@ A row can be flagged only after minimum recent and baseline volume gates are met
 - Broad NYC latitude bounds: `40.4774` to `40.9176`
 - Broad NYC longitude bounds: `-74.2591` to `-73.7004`
 - Coordinates must be non-missing and non-zero.
-- Phase 2 coordinate quality flags must not mark the row as missing, zero, or out of bounds.
+- Cleaning-stage coordinate quality flags must not mark the row as missing,
+  zero, or out of bounds.
 - Grid size: `0.01` degrees.
 
 ## Evaluation Summary
@@ -145,18 +151,20 @@ A row can be flagged only after minimum recent and baseline volume gates are met
 - A 0.01-degree grid is deterministic and easy to reproduce, but it is not an equal-area spatial index.
 - Coordinate centroids summarize complaint locations and should not be interpreted as exact incident addresses.
 
-## Historical pre-integration limitations
+## Limitations and dashboard context
 
-This section records the analytical-layer review before dashboard integration.
-Hotspots are now integrated with aggregate volume, baseline, lift, coordinate,
-window, and responsible-use context; see the
-[delivered Map report](phase_7b_map_hotspot_view.md) and
-[Governance report](dashboard_governance_view.md).
+Hotspots are integrated with aggregate volume, baseline, lift, coordinate,
+window, and responsible-use context. See the
+[dashboard README](../dashboard/README.md) and
+[final project report](final_project_report.md) for map behavior and the
+aggregate-only boundary.
 
 - Hotspots describe elevated aggregate complaint density; they do not explain causality.
 - Reported complaint counts can be affected by reporting delay, classification changes, policy changes, and data revisions.
-- Fixed thresholds should be monitored for alert volume by borough, offense, and law category before broader dashboard use.
-- A dashboard should show volume gates, baseline counts, lift, coordinate coverage, and scoring window dates next to every hotspot.
+- Fixed thresholds should be monitored for signal volume by borough, offense,
+  and law category when the analytical snapshot changes.
+- The dashboard shows volume gates, baseline counts, lift, coordinate coverage,
+  and scoring-window dates with hotspot results.
 - This layer does not include uncertainty intervals, reporting-lag correction, event calendars, street-network topology, or spatial smoothing.
 
 ## Ethics Constraint

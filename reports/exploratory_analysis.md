@@ -4,7 +4,9 @@ Generated at UTC: `2026-07-05T11:34:42.169299+00:00`
 
 ## Scope
 
-This Phase 3 analytical baseline reads the cleaned Phase 2 Parquet outputs and produces dashboard-ready descriptive summaries. It does not implement forecasting, machine learning, APIs, or a dashboard UI.
+The exploratory analysis reads the canonical cleaned Parquet outputs and
+produces dashboard-ready descriptive summaries. Forecasting, machine learning,
+and browser-contract construction are handled by separate builders.
 
 ## Inputs
 
@@ -330,7 +332,9 @@ Other offense count outside the displayed top list: `217,253`.
 
 ## Ethics Constraint
 
-Victim and suspect demographic fields are intentionally excluded from this dashboard summary. They are not used as grouping fields, ranking features, heatmap dimensions, or future model features in this Phase 3 work.
+Victim and suspect demographic fields are intentionally excluded from this
+dashboard summary. They are not used as grouping fields, ranking features,
+heatmap dimensions, or model features.
 
 Excluded fields:
 

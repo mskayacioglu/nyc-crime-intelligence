@@ -1139,10 +1139,11 @@ def write_baseline_report(path: Path, payload: dict[str, Any]) -> None:
         "## Scope",
         "",
         (
-            "This Phase 4 baseline reads `crime_weekly_area.parquet` and predicts the "
+            "The baseline builder reads `crime_weekly_area.parquet` and predicts the "
             "next weekly `crime_count` for each borough, precinct, offense type, and "
             "law category segment. It implements explainable historical baselines only; "
-            "no Phase 5 machine-learning model is trained."
+            "the separate ML builder is described in "
+            "[the ML model report](ml_model_report.md)."
         ),
         "",
         "## Inputs and Outputs",
@@ -1278,11 +1279,11 @@ def write_baseline_report(path: Path, payload: dict[str, Any]) -> None:
         "",
         "## Limitations",
         "",
-        "- Missing weeks are inferred as zero after first observation because the Phase 2 aggregate stores observed event groups, not a complete zero-filled panel.",
+        "- Missing weeks are inferred as zero after first observation because the cleaned aggregate stores observed event groups, not a complete zero-filled panel.",
         "- The latest source week is excluded from backtesting by default because it may be partial; the next-week forecast still uses it as the latest available observation.",
         "- Baselines do not model holidays, reporting delays, structural breaks, spatial spillover, or long-run trend shifts.",
         (
-            "- Forecast intervals are not produced in Phase 4. This remains an explicit "
+            "- Forecast intervals are not produced by the baseline builder. This remains an explicit "
             "limitation: the fixed historical/demo dashboard shows point estimates and "
             "historical validation context without inventing an interval or claiming "
             "operational use."

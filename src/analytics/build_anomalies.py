@@ -1452,10 +1452,11 @@ def write_anomaly_report(path: Path, payload: dict[str, Any]) -> None:
         "## Scope",
         "",
         (
-            "This Phase 6A layer identifies unusually high aggregate weekly crime counts "
-            "for borough, precinct, offense type, and law category segments. It implements "
-            "only anomaly detection; it does not create hotspot maps, dashboards, APIs, "
-            "patrol recommendations, or person-level scores."
+            "The anomaly builder identifies unusually high aggregate weekly complaint "
+            "counts for borough, precinct, offense type, and law category segments. Its "
+            "output is integrated into the dashboard's aggregate list/detail experience, "
+            "while the builder remains responsible only for retrospective anomaly "
+            "analysis. It does not create an API, patrol recommendation, or person-level score."
         ),
         "",
         "## Inputs and Outputs",
@@ -1474,7 +1475,7 @@ def write_anomaly_report(path: Path, payload: dict[str, Any]) -> None:
         "Scoring formulas:",
         "",
         "- `expected_historical_count = mean(prior 13 weekly counts)`.",
-        "- `expected_ml_count = Phase 5 predicted_crime_count` when a safe backtest prediction exists.",
+        "- `expected_ml_count = predicted_crime_count` from the reviewed ML backtest when a safe prediction exists.",
         "- `expected_count = expected_ml_count` when available, otherwise `expected_historical_count`.",
         "- `residual_count = actual_crime_count - expected_count`.",
         "- `historical_residual_count = actual_crime_count - expected_historical_count`.",
@@ -1496,7 +1497,7 @@ def write_anomaly_report(path: Path, payload: dict[str, Any]) -> None:
         "- No random splits are used.",
         "- Missing segment-weeks are zero-filled only after the segment first appears.",
         "- The latest source week is excluded from scoring by default because it may be partial.",
-        "- ML residuals use only Phase 5 backtest predictions with actual counts; next-week forecast rows are excluded.",
+        "- ML residuals use only reviewed backtest predictions with actual counts; next-week forecast rows are excluded.",
         f"- ML prediction use status: `{ml_status['status']}`.",
         "",
         "## Evaluation Summary",
@@ -1538,19 +1539,28 @@ def write_anomaly_report(path: Path, payload: dict[str, Any]) -> None:
             "residuals after the minimum-volume gate. Groups must have at least "
             f"{config['volatile_group_min_evaluated_weeks']} evaluated segment-weeks and "
             f"{config['volatile_group_min_actual_count']} actual complaints in this table. "
-            "They are useful candidates for forecast-error monitoring before dashboard use."
+            "They are useful candidates for ongoing forecast-error review; they are not "
+            "filter-specific guarantees or policing priorities."
         ),
         "",
         markdown_table(payload["volatile_borough_offense_groups"]),
         "",
-        "## Limitations Before Dashboard Use",
+        "## Limitations and dashboard context",
+        "",
+        (
+            "Anomalies are integrated with a complete list/detail experience and display "
+            "expected count, residual, prior volume, lifecycle, and limitation context. "
+            "See the [dashboard README](../dashboard/README.md) and "
+            "[final project report](final_project_report.md) for the browser contract and "
+            "responsible-use boundary."
+        ),
         "",
         "- The layer identifies unusually high aggregate counts; it does not explain causality.",
         "- The latest source week may be partial depending on the upstream data extract.",
         "- Reported complaint counts can be affected by reporting delay, policy changes, classification changes, and data revisions.",
-        "- The current thresholds are conservative defaults and should be monitored for alert volume by borough and offense type.",
+        "- The reviewed thresholds are conservative defaults and should be monitored for signal volume by borough and offense type when the analytical snapshot changes.",
         "- No uncertainty intervals, holidays, special events, spatial spillover terms, or reporting-lag corrections are included yet.",
-        "- Dashboard surfaces should show the expected count, residual, prior volume gate, and model age next to every anomaly.",
+        "- The dashboard shows expected count, residual, prior volume gate, and model lifecycle context with anomaly results.",
         "",
         "## Ethics Constraint",
         "",

@@ -1514,7 +1514,7 @@ def build_metrics_payload(
             ),
             "coordinate_filter": (
                 "non-missing, non-zero latitude/longitude inside broad NYC bounds "
-                "and not flagged by Phase 2 coordinate quality flags"
+                "and not flagged by cleaning-stage coordinate quality flags"
             ),
             "recency_weighted_event_count": (
                 "0.50 * recent_7_day_count + 0.35 * events from days 8-30 + "
@@ -1598,11 +1598,12 @@ def write_hotspot_report(path: Path, payload: dict[str, Any]) -> None:
         "## Scope",
         "",
         (
-            "This Phase 6B layer identifies elevated recent aggregate crime density "
+            "The hotspot builder identifies elevated recent aggregate complaint density "
             "for precinct/offense/law-category and grid-cell/offense/law-category "
-            "groups. It implements only hotspot detection; it does not create "
-            "dashboard UI, APIs, patrol recommendations, enforcement recommendations, "
-            "or person-level scores."
+            "groups. Its output is integrated into the dashboard's map and complete "
+            "list/detail path, while the builder remains responsible only for retrospective "
+            "aggregate hotspot analysis. It does not create an API, patrol or enforcement "
+            "recommendation, or person-level score."
         ),
         "",
         "## Inputs and Outputs",
@@ -1682,7 +1683,7 @@ def write_hotspot_report(path: Path, payload: dict[str, Any]) -> None:
         f"- Broad NYC latitude bounds: `{NYC_LAT_MIN}` to `{NYC_LAT_MAX}`",
         f"- Broad NYC longitude bounds: `{NYC_LON_MIN}` to `{NYC_LON_MAX}`",
         "- Coordinates must be non-missing and non-zero.",
-        "- Phase 2 coordinate quality flags must not mark the row as missing, zero, or out of bounds.",
+        "- Cleaning-stage coordinate quality flags must not mark the row as missing, zero, or out of bounds.",
         f"- Grid size: `{config['grid_size_degrees']}` degrees.",
         "",
         "## Evaluation Summary",
@@ -1729,12 +1730,20 @@ def write_hotspot_report(path: Path, payload: dict[str, Any]) -> None:
         "- A 0.01-degree grid is deterministic and easy to reproduce, but it is not an equal-area spatial index.",
         "- Coordinate centroids summarize complaint locations and should not be interpreted as exact incident addresses.",
         "",
-        "## Limitations Before Dashboard Use",
+        "## Limitations and dashboard context",
+        "",
+        (
+            "Hotspots are integrated with aggregate volume, baseline, lift, coordinate, "
+            "window, and responsible-use context. See the "
+            "[dashboard README](../dashboard/README.md) and "
+            "[final project report](final_project_report.md) for map behavior and the "
+            "aggregate-only boundary."
+        ),
         "",
         "- Hotspots describe elevated aggregate complaint density; they do not explain causality.",
         "- Reported complaint counts can be affected by reporting delay, classification changes, policy changes, and data revisions.",
-        "- Fixed thresholds should be monitored for alert volume by borough, offense, and law category before dashboard release.",
-        "- A dashboard should show volume gates, baseline counts, lift, coordinate coverage, and scoring window dates next to every hotspot.",
+        "- Fixed thresholds should be monitored for signal volume by borough, offense, and law category when the analytical snapshot changes.",
+        "- The dashboard shows volume gates, baseline counts, lift, coordinate coverage, and scoring-window dates with hotspot results.",
         "- This layer does not include uncertainty intervals, reporting-lag correction, event calendars, street-network topology, or spatial smoothing.",
         "",
         "## Ethics Constraint",
