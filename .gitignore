@@ -44,6 +44,7 @@ data/processed/*
 !/models/weekly_forecast/
 /models/weekly_forecast/*
 !/models/weekly_forecast/model_manifest.json
+/huggingface/
 mlruns/
 *.pkl
 *.joblib
