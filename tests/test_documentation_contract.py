@@ -182,6 +182,28 @@ class DocumentationContractTest(unittest.TestCase):
             self.assertIn("npm ci", text, readme)
             self.assertIn(expected_node, text, readme)
 
+    def test_root_launcher_is_executable_documented_and_syntax_valid(self) -> None:
+        launcher = PROJECT_ROOT / "run.sh"
+        self.assertTrue(launcher.is_file())
+        self.assertTrue(launcher.stat().st_mode & 0o111)
+
+        source = launcher.read_text(encoding="utf-8")
+        self.assertIn("npm ci", source)
+        self.assertIn("exec npm run dev", source)
+        self.assertIn("DASHBOARD_HOST", source)
+        self.assertIn("DASHBOARD_PORT", source)
+        self.assertIn("./run.sh", (PROJECT_ROOT / "README.md").read_text(encoding="utf-8"))
+
+        syntax_check = subprocess.run(
+            ["bash", "-n", str(launcher)],
+            check=False,
+            text=True,
+            encoding="utf-8",
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+        )
+        self.assertEqual(0, syntax_check.returncode, syntax_check.stderr)
+
     def test_final_report_covers_required_scope_without_status_overclaim(self) -> None:
         self.assertTrue(FINAL_REPORT.is_file())
         report = FINAL_REPORT.read_text(encoding="utf-8")

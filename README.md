@@ -87,12 +87,22 @@ The committed browser-safe artifacts are sufficient to run the local UI.
 From the repository root:
 
 ```bash
+./run.sh
+```
+
+Open <http://127.0.0.1:4173/>. Stop the server with `Ctrl+C` when finished.
+The launcher verifies Node.js and npm, installs locked frontend dependencies
+when they are missing or stale, and then starts the Vite development server.
+Set `DASHBOARD_PORT` or `DASHBOARD_HOST` to override its local defaults; run
+`./run.sh --help` for an example.
+
+The equivalent manual commands are:
+
+```bash
 cd dashboard
 npm ci
 npm run dev -- --port 4173 --strictPort
 ```
-
-Open <http://127.0.0.1:4173/>. Stop the server with `Ctrl+C` when finished.
 
 Use **Governance** for dataset/model-wide metadata and limitations. Governance
 does not show the global filter toolbar, but the App preserves filter state for
