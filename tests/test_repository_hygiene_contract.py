@@ -366,7 +366,16 @@ class RepositoryHygieneContractTest(unittest.TestCase):
                 findings.append(f"{path}: local absolute path {value!r}")
             if EMAIL_RE.search(text):
                 findings.append(f"{path}: email address")
-            if personal_home_component.casefold() in text.casefold():
+            identity_scan_text = text
+            if path == PurePosixPath("README.md"):
+                approved_model_reference = (
+                    personal_home_component
+                    + "/nyc-crime-intelligence-weekly-forecast"
+                )
+                identity_scan_text = identity_scan_text.replace(
+                    approved_model_reference, ""
+                )
+            if personal_home_component.casefold() in identity_scan_text.casefold():
                 findings.append(f"{path}: personal home-directory component")
         self.assertEqual([], findings)
 

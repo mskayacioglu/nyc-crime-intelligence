@@ -6,6 +6,10 @@ cleaning, weekly aggregation, historical analysis, baseline and
 machine-learning forecasts, hotspot and anomaly signals, and a local browser
 dashboard.
 
+The released forecasting artifact, standalone inference code, and detailed
+model card are available on Hugging Face:
+[mskayacioglu/nyc-crime-intelligence-weekly-forecast](https://huggingface.co/mskayacioglu/nyc-crime-intelligence-weekly-forecast).
+
 The project is intended for transparent, retrospective exploration of reported
 complaint patterns. It does not predict individual behavior, assign person-level
 risk, label neighborhoods as dangerous, or recommend patrol, enforcement,
@@ -25,9 +29,8 @@ snapshot. The dashboard includes:
 | Anomalies | Unusually high aggregate increases that have already been observed | Historical observed weeks |
 | Governance | Dataset/model coverage, quality warnings, lifecycle facts, and responsible-use limits | Dataset/model artifact scope |
 
-This repository is prepared for public source-code hosting, but this document
-does not claim that a GitHub repository, hosted demo, or Hugging Face model page
-already exists. Those links can be added after the owner creates them.
+Source code is hosted in this GitHub repository, while the corresponding model
+release is maintained separately on the linked Hugging Face model page.
 
 ## Quick start
 

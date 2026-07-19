@@ -256,7 +256,8 @@ class DocumentationContractTest(unittest.TestCase):
 
         for term in (
             "## Project status",
-            "prepared for public source-code hosting",
+            "https://huggingface.co/",
+            "nyc-crime-intelligence-weekly-forecast",
             "rows excluded by the date-eligibility rule",
             "literal `UNKNOWN` categories",
             "## Known limitations",
