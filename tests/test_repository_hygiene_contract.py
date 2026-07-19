@@ -495,6 +495,40 @@ class RepositoryHygieneContractTest(unittest.TestCase):
             self.assertEqual(0, result.returncode, path)
         self.assertEqual("", git_output("ls-files", "-ci", "--exclude-standard"))
 
+    def test_reachable_git_history_excludes_raw_data_and_legacy_eda_output(self) -> None:
+        # Public branch and tag refs are the set transferred by the normal
+        # sharing workflow. Codex keeps private tree-only checkpoint refs under
+        # refs/codex; they are neither commits nor part of a branch/tag push.
+        history = git_output("rev-list", "--objects", "--branches", "--tags")
+        prohibited_paths = (
+            "data/raw/NYPD_Complaint_Data_Historic.csv",
+            "notebooks/nypd_complaint_data_comprehensive_eda.ipynb",
+        )
+        for path in prohibited_paths:
+            self.assertNotIn(f" {path}\n", f"\n{history}", path)
+
+        object_lines = [line for line in history.splitlines() if line]
+        inspected = subprocess.run(
+            [
+                "git",
+                "-C",
+                str(PROJECT_ROOT),
+                "cat-file",
+                "--batch-check=%(objecttype) %(objectsize) %(rest)",
+            ],
+            input="\n".join(object_lines) + "\n",
+            text=True,
+            encoding="utf-8",
+            stdout=subprocess.PIPE,
+            check=True,
+        ).stdout
+        oversized = []
+        for line in inspected.splitlines():
+            object_type, size, *path_parts = line.split(" ")
+            if object_type == "blob" and int(size) > 5 * 1024 * 1024:
+                oversized.append(" ".join(path_parts) or "<unnamed blob>")
+        self.assertEqual([], oversized)
+
     def test_detectors_reject_synthetic_local_paths_personal_ids_and_secrets(self) -> None:
         local_path = "/" + "Users/" + ("real" + "person") + "/" + "project/file.json"
         root_path = "/" + "root/" + ("real" + "person") + "/" + "project/file.json"

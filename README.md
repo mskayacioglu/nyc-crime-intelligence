@@ -251,6 +251,8 @@ byte-for-byte. Practical dashboard checks cover 1280 × 900, 768 × 1024, and
 
 Start with:
 
+- [Data sources and terms](DATA_SOURCES.md) — code-license boundary, official
+  source links, NYC Open Data terms, and the raw-data exclusion policy.
 - [Final project report](reports/final_project_report.md) — end-to-end question,
   provenance, methods, model, views, verification, limitations, and use bounds.
 - [Roadmap](Roadmap.md) — product scope, completed increments, and remaining
@@ -285,6 +287,14 @@ Official precinct source provenance is documented in
 Complaint-source provenance and exact reviewed-snapshot identity are documented
 in
 [data/source/nyc_open_data/nypd_complaint_data_historic.md](data/source/nyc_open_data/nypd_complaint_data_historic.md).
+
+## License
+
+Original project software and documentation are available under the
+[MIT License](LICENSE). The raw NYPD complaint dataset is not part of this
+repository, and the MIT License does not relicense third-party data, map tiles,
+or other third-party material. See [Data sources and terms](DATA_SOURCES.md) for
+the authoritative dataset reference and applicable source terms.
 
 ## Responsible-use boundary
 

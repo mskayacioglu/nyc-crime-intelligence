@@ -367,6 +367,15 @@ explicit production audit also reported zero vulnerabilities,
 Markdown/language/privacy/path/notebook hygiene passed, `git diff --check HEAD`
 passed, and port 4173 was free before and after verification.
 
+On 2026-07-19, after adding the code-license and third-party-data boundary and
+rewriting the shareable branch history, the normal verification command passed
+all 135 Python contract tests and all 214 Vitest tests. ESLint and the
+TypeScript/Vite production build passed, both dependency audits reported zero
+vulnerabilities, `git diff --check HEAD` passed, and port 4173 was free before
+and after the run. The history hygiene contract also confirmed that public
+branch and tag history contains neither the raw complaint CSV path nor the
+legacy output-bearing EDA notebook path, and no reachable blob exceeds 5 MiB.
+
 That production build reported these raw/gzip sizes:
 
 | Asset | Size |

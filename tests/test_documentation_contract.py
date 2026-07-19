@@ -122,6 +122,23 @@ class DocumentationContractTest(unittest.TestCase):
             ]
             self.assertEqual([], unpinned, filename)
 
+    def test_code_license_and_data_terms_are_explicit(self) -> None:
+        license_text = (PROJECT_ROOT / "LICENSE").read_text(encoding="utf-8")
+        data_terms = (PROJECT_ROOT / "DATA_SOURCES.md").read_text(encoding="utf-8")
+        readme = (PROJECT_ROOT / "README.md").read_text(encoding="utf-8")
+
+        self.assertIn("MIT License", license_text)
+        self.assertIn("Copyright (c) 2026", license_text)
+        self.assertIn(
+            "The raw **NYPD Complaint Data Historic** dataset is not included",
+            data_terms,
+        )
+        self.assertIn("qgea-i56i", data_terms)
+        self.assertIn("https://opendata.cityofnewyork.us/faq/", data_terms)
+        self.assertIn("NYC Open Data terms and disclaimer", data_terms)
+        self.assertIn("does not relicense third-party source data", data_terms)
+        self.assertIn("[Data sources and terms](DATA_SOURCES.md)", readme)
+
     def test_notebooks_do_not_install_packages_or_write_canonical_eda_outputs(self) -> None:
         for notebook in sorted((PROJECT_ROOT / "notebooks").glob("*.ipynb")):
             payload = json.loads(notebook.read_text(encoding="utf-8"))
